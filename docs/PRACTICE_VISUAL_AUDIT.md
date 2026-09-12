@@ -1,4 +1,20 @@
-# Practice visual and position-highlight audit (v0.3.4)
+# Practice visual and routine-selector audit
+
+## v0.3.5 selector/layout follow-up
+
+The v0.3.4 list/master-detail browser has been replaced by Category and Routine
+dropdowns followed by exactly one selected detail. The detail content scrolls within
+a fixed 330px surface; its action bar does not scroll. Practice Sessions and My
+Routines preserve separate selected IDs, while the built-in category is also
+persisted. Invalid categories, stale IDs and deleted user routines fall back safely.
+
+Offscreen production-QML acceptance at 800×660 and 600×660 exercised all seven
+categories, first/middle/last rapid selection, Practice Sessions/My Routines switching,
+the bounded dropdown popup and the Running view. The Practice section remained 454px
+tall with no binding loop, reference, assignment, clipping or horizontal-overflow
+errors. No music or preset data changed: the 40-row v0.3.4 matrix below remains valid.
+
+## v0.3.4 visual/position audit
 
 Audit date: 2026-09-13. Marketplace preparation remained paused. This review
 preserved the v0.3.3 scale, spelling, tuning, chord, meter and canonical-coordinate
@@ -37,17 +53,16 @@ and 4-5-6. This is voice-order matching, not pitch-density selection. In alterna
 tunings the accurate chord-tone map remains visible and the UI explicitly suppresses
 the Standard-only named-shape emphasis.
 
-Practice Sessions now uses a fixed-height master/detail browser. Selection changes a
-compact row's highlight only. The bounded left list owns scrolling; description,
-instructions, teaching visual and actions live in the separate detail pane. Starting
-a routine replaces the browser with a bounded running view that retains the same
-visual contract.
+Practice Sessions now uses Category and Routine dropdowns followed by one fixed-height
+detail. Only detail content scrolls; selectors and actions remain fixed. Starting a
+routine replaces the selector/detail view with a bounded running view that retains
+the same visual contract.
 
 ## Forty-preset validation matrix
 
 “Theory source” names the independently audited source family used in v0.3.2 and
-rechecked here. “Layout correct” includes fixed compact list-row projection, bounded
-detail rendering and reuse of the same visual in the running view.
+rechecked here. “Layout correct” includes selector filtering, bounded single-detail
+rendering and reuse of the same visual in the running view.
 
 | Preset | Visual Type | Theory Source | Visual Correct | Layout Correct | PASS/FAIL |
 |---|---|---|---|---|---|
@@ -102,8 +117,8 @@ path, picking or rhythm-grid data; existing verified music data was preserved.
 emphasis for all five A-minor boxes, root persistence, octave-equivalent 0–12 shape
 handling, A-major/A-minor root/first/second triads, all four string-set filters,
 diminished/augmented coverage, every item’s supported visual type and coordinate
-bounds, rhythm-grid/metronome agreement, compound 6/8 grouping, and stable browser
-membership/row kind across selection changes.
+bounds, rhythm-grid/metronome agreement, compound 6/8 grouping, selector filtering,
+source switching and safe invalid/deleted selection fallback.
 
 ## Manual UI acceptance
 

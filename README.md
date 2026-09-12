@@ -40,11 +40,11 @@ panel, instead of a pile of separate mini-apps.
 - Routines is a first-class Practice tab (second, right beside Metronome) with two
   parts: **Practice Sessions**, a curated bank of 40 built-in presets across 7
   categories (Warmups, Scales, Scale Patterns, Triads, Chords, Technique, Rhythm) that
-  you can browse in a bounded compact list, preview in a separate detail pane, start
-  immediately, or duplicate into an editable routine
+  you can filter by category and choose from a compact Routine dropdown, then preview
+  only that routine in a bounded detail pane, start immediately, or duplicate it into an editable routine
   without ever touching the built-in template; and **My Routines**, your own saved
-  routines built from warmup/scales/chord-change/technique/song/free practice/
-  ear-training/custom blocks, with reorder, duplicate, and "start entire routine"
+  routines copied from verified sessions, with rename/reorder/remove, duplicate,
+  delete, and "start entire routine"
 - Starting a routine or preset configures its required tuning, scale/chord and
   fretboard, the
   metronome or tempo trainer, and the timer for you, and shows a visual aid alongside

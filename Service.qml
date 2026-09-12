@@ -619,6 +619,30 @@ Item {
     function presetsByCategory(category) { return Presets.presetsByCategory(category) }
     function presetById(id) { return Presets.presetById(id) }
 
+    function setRoutineBrowserSource(source) {
+        var normalized = source === "mine" ? "mine" : "presets"
+        if (preferences.routineSource === normalized) return
+        preferences = Object.assign({}, preferences, { routineSource: normalized })
+        requestSave()
+    }
+
+    function setRoutineBrowserCategory(category) {
+        var normalized = typeof category === "string" && category ? category : "All"
+        if (preferences.routineCategory === normalized) return
+        preferences = Object.assign({}, preferences, { routineCategory: normalized })
+        requestSave()
+    }
+
+    function setRoutineBrowserSelection(source, id) {
+        var key = source === "mine" ? "routineUserId" : "routinePresetId"
+        var value = typeof id === "string" ? id : ""
+        if (preferences[key] === value) return
+        var patch = {}
+        patch[key] = value
+        preferences = Object.assign({}, preferences, patch)
+        requestSave()
+    }
+
     function applyRoutineItem(item) {
         if (!item) return
         if (item.tuningId) setTuning(item.tuningId)

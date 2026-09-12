@@ -22,7 +22,11 @@ function defaultPreferences() {
         // and sanitizedPreferences() below fills it in from the default -
         // no schemaVersion bump or migration step needed for an additive,
         // backward-compatible preference like this one.
-        tunerSensitivity: "normal"
+        tunerSensitivity: "normal",
+        routineSource: "presets",
+        routineCategory: "All",
+        routinePresetId: "",
+        routineUserId: ""
     }
 }
 
@@ -53,7 +57,11 @@ function sanitizedPreferences(raw) {
         lastTimeSignatureId: typeof raw.lastTimeSignatureId === "string" && raw.lastTimeSignatureId ? raw.lastTimeSignatureId : defaults.lastTimeSignatureId,
         lastSubdivisionId: typeof raw.lastSubdivisionId === "string" && raw.lastSubdivisionId ? raw.lastSubdivisionId : defaults.lastSubdivisionId,
         tunerInputDevice: typeof raw.tunerInputDevice === "string" ? raw.tunerInputDevice : defaults.tunerInputDevice,
-        tunerSensitivity: TUNER_SENSITIVITIES.indexOf(raw.tunerSensitivity) >= 0 ? raw.tunerSensitivity : defaults.tunerSensitivity
+        tunerSensitivity: TUNER_SENSITIVITIES.indexOf(raw.tunerSensitivity) >= 0 ? raw.tunerSensitivity : defaults.tunerSensitivity,
+        routineSource: raw.routineSource === "mine" ? "mine" : defaults.routineSource,
+        routineCategory: typeof raw.routineCategory === "string" && raw.routineCategory ? raw.routineCategory : defaults.routineCategory,
+        routinePresetId: typeof raw.routinePresetId === "string" ? raw.routinePresetId : defaults.routinePresetId,
+        routineUserId: typeof raw.routineUserId === "string" ? raw.routineUserId : defaults.routineUserId
     }
 }
 

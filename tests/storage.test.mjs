@@ -9,6 +9,8 @@ test("decodes an empty/missing payload into safe defaults", () => {
   assert.equal(result.ok, true)
   assert.equal(result.value.schemaVersion, 1)
   assert.equal(result.value.preferences.a4, 440)
+  assert.equal(result.value.preferences.routineSource, "presets")
+  assert.equal(result.value.preferences.routineCategory, "All")
   assert.equal(result.value.routines.length, 0)
 })
 
@@ -76,6 +78,21 @@ test("rejects an unrecognized tuner sensitivity value", () => {
   const raw = JSON.stringify({ schemaVersion: 1, preferences: { tunerSensitivity: "extremely_loud" } })
   const result = Storage.decode(raw)
   assert.equal(result.value.preferences.tunerSensitivity, "normal")
+})
+
+test("sanitizes and preserves routine selector preferences", () => {
+  const valid = Storage.decode(JSON.stringify({ schemaVersion: 1, preferences: {
+    routineSource: "mine", routineCategory: "Scales", routinePresetId: "preset-1", routineUserId: "routine-1"
+  }})).value.preferences
+  assert.deepEqual({ source: valid.routineSource, category: valid.routineCategory,
+    preset: valid.routinePresetId, user: valid.routineUserId },
+  { source: "mine", category: "Scales", preset: "preset-1", user: "routine-1" })
+  const invalid = Storage.decode(JSON.stringify({ schemaVersion: 1, preferences: {
+    routineSource: "unknown", routineCategory: 42, routinePresetId: null, routineUserId: false
+  }})).value.preferences
+  assert.deepEqual({ source: invalid.routineSource, category: invalid.routineCategory,
+    preset: invalid.routinePresetId, user: invalid.routineUserId },
+  { source: "presets", category: "All", preset: "", user: "" })
 })
 
 test("marks a schemaVersion-less payload as migrated", () => {

@@ -4,8 +4,6 @@ import QtQuick.Layouts
 import qs.Commons
 import qs.Ui
 import "../js/metronome.js" as Metronome
-import "../js/routines.js" as Routines
-import "../js/exercises.js" as Exercises
 import "../js/theory.js" as Theory
 import "../js/fretboard.js" as Fretboard
 import "../js/visual_shapes.js" as VisualShapes
@@ -18,10 +16,12 @@ Item {
     property var service: null
     property var bar: null
     property string mode: "metronome" // metronome | routines | trainer | timer
-    property string initialPresetId: "" // deterministic deep-link/test selection; rows remain unchanged
-    property string initialCategory: "All"
-    property string browserSelection: initialPresetId
-
+    readonly property var routineSelectorState: PresetBrowser.selectorState(
+        service && service.preferences ? service.preferences.routineSource : "presets",
+        service ? service.allPresets() : [],
+        service ? service.presetCategories() : [],
+        service ? service.routines : [],
+        service && service.preferences ? service.preferences : {})
     implicitHeight: layout.implicitHeight
     Layout.fillWidth: true
 
@@ -455,7 +455,68 @@ Item {
             id: routinesRoot
             width: layout.width
             spacing: Style.spacing.md
-            property string subMode: "presets" // presets | mine
+            readonly property var selector: root.routineSelectorState
+            readonly property string subMode: selector.source
+            readonly property string category: selector.category
+            readonly property var chosen: selector.selected
+            readonly property var selectedItem: chosen && chosen.items.length ? chosen.items[0] : null
+            property bool editorOpen: false
+            property string editorName: ""
+            property var editorItems: []
+
+            onSubModeChanged: cancelEdit()
+
+            function suggestedBpm(item) {
+                if (!item) return "—"
+                return item.targetBpm || (item.metronome ? item.metronome.startBpm : null) || "—"
+            }
+
+            function metronomeSummary(item) {
+                if (!item || !item.metronome) return "Optional"
+                var meter = (item.metronome.timeSignatureId || "4-4").replace("-", "/")
+                var subdivision = (item.metronome.subdivisionId || "quarter").replace(/_/g, " ")
+                return meter + " · " + subdivision
+            }
+
+            function beginEdit() {
+                if (!chosen || subMode !== "mine") return
+                editorName = chosen.name
+                editorItems = chosen.items.slice()
+                editorOpen = true
+            }
+
+            function cancelEdit() {
+                editorOpen = false
+                editorName = ""
+                editorItems = []
+            }
+
+            function saveEdit() {
+                if (!root.service || !chosen || !editorName.trim() || editorItems.length === 0) return
+                root.service.updateRoutine(Object.assign({}, chosen, {
+                    name: editorName.trim(), items: editorItems.slice(), updatedAt: Date.now()
+                }))
+                cancelEdit()
+            }
+
+            function duplicateSelected() {
+                if (!root.service || !chosen) return
+                var copy = subMode === "mine" ? root.service.duplicateRoutineById(chosen.id)
+                    : root.service.duplicatePreset(chosen.id)
+                if (!copy) return
+                root.service.setRoutineBrowserSource("mine")
+                root.service.setRoutineBrowserSelection("mine", copy.id)
+                cancelEdit()
+            }
+
+            function deleteSelected() {
+                if (!root.service || !chosen || subMode !== "mine") return
+                var remaining = root.service.routines.filter(function (routine) { return routine.id !== chosen.id })
+                var fallback = PresetBrowser.selectedRoutine(remaining, "")
+                root.service.deleteRoutine(chosen.id)
+                root.service.setRoutineBrowserSelection("mine", fallback ? fallback.id : "")
+                cancelEdit()
+            }
 
             // ---- running panel: shown prominently whenever a routine is active ----
             ColumnLayout {
@@ -595,321 +656,275 @@ Item {
                 value: routinesRoot.subMode
                 foreground: Color.foreground
                 accent: Color.accent
-                onChanged: function (value) { routinesRoot.subMode = value }
+                onChanged: function (value) {
+                    if (root.service) root.service.setRoutineBrowserSource(value)
+                }
             }
 
-            Loader {
+            RowLayout {
                 visible: root.service ? !root.service.activeRoutine : true
                 Layout.fillWidth: true
-                sourceComponent: routinesRoot.subMode === "mine" ? myRoutinesView : presetsView
+                spacing: Style.spacing.md
+
+                Dropdown {
+                    Layout.preferredWidth: Style.space(210)
+                    Layout.fillWidth: true
+                    label: "Category"
+                    options: routinesRoot.subMode === "presets"
+                        ? ["All"].concat(root.service ? root.service.presetCategories() : []) : ["All"]
+                    value: routinesRoot.category
+                    enabled: routinesRoot.subMode === "presets"
+                    onChanged: function (value) {
+                        if (!root.service) return
+                        root.service.setRoutineBrowserCategory(value)
+                        var filtered = PresetBrowser.filteredPresets(root.service.allPresets(), value)
+                        var next = PresetBrowser.selectedRoutine(filtered, root.service.preferences.routinePresetId)
+                        root.service.setRoutineBrowserSelection("presets", next ? next.id : "")
+                    }
+                }
+
+                Dropdown {
+                    Layout.preferredWidth: Style.space(560)
+                    Layout.fillWidth: true
+                    label: "Routine"
+                    options: PresetBrowser.routineOptions(routinesRoot.selector.routines)
+                    value: routinesRoot.selector.selectedId
+                    enabled: routinesRoot.selector.routines.length > 0
+                    onChanged: function (value) {
+                        if (root.service) root.service.setRoutineBrowserSelection(routinesRoot.subMode, value)
+                    }
+                }
             }
 
-            // ---- presets browser ----
-            Component {
-                id: presetsView
+            // Only one selected routine exists in the content tree. Its content
+            // scrolls inside this fixed surface; selectors and actions stay put.
+            Rectangle {
+                visible: root.service ? !root.service.activeRoutine : true
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(330)
+                color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.025)
+                radius: Style.space(6)
+                clip: true
+
                 ColumnLayout {
-                    id: browser
-                    width: layout.width
-                    spacing: Style.spacing.md
-                    property string category: root.initialCategory
-                    readonly property var allPresets: root.service ? root.service.allPresets() : []
-                    readonly property var chosen: PresetBrowser.selectedPreset(allPresets, category, root.browserSelection)
-                    readonly property bool narrow: width < Style.space(650)
+                    anchors.fill: parent
+                    anchors.margins: Style.space(10)
+                    spacing: Style.spacing.xs
 
-                    ButtonGroup {
-                        visible: !browser.narrow
+                    Flickable {
+                        id: routineDetailScroll
+                        objectName: "routineDetailScroll"
                         Layout.fillWidth: true
-                        options: ["All"].concat(root.service ? root.service.presetCategories() : [])
-                        value: category
-                        foreground: Color.foreground
-                        accent: Color.accent
-                        onChanged: function (value) { category = value }
-                    }
-                    Dropdown {
-                        visible: browser.narrow
-                        Layout.fillWidth: true
-                        label: "Category"
-                        options: ["All"].concat(root.service ? root.service.presetCategories() : [])
-                        value: browser.category
-                        onChanged: function (value) { browser.category = value }
-                    }
+                        Layout.fillHeight: true
+                        contentWidth: width
+                        contentHeight: routineDetail.implicitHeight
+                        clip: true
+                        boundsBehavior: Flickable.StopAtBounds
+                        interactive: contentHeight > height
 
-                    GridLayout {
-                        Layout.fillWidth: true
-                        columns: browser.narrow ? 1 : 2
-                        columnSpacing: Style.spacing.md
-                        rowSpacing: Style.spacing.sm
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.preferredWidth: browser.narrow ? browser.width : Style.space(275)
-                            Layout.preferredHeight: browser.narrow ? Style.space(90) : Style.space(410)
-                            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.045)
-                            radius: Style.space(6)
-                            clip: true
-
-                            Flickable {
-                                id: presetList
-                                anchors.fill: parent
-                                anchors.margins: Style.space(5)
-                                contentWidth: width
-                                contentHeight: presetListColumn.height
-                                clip: true
-                                boundsBehavior: Flickable.StopAtBounds
-
-                                Column {
-                                    id: presetListColumn
-                                    width: presetList.width - (presetList.contentHeight > presetList.height ? Style.space(8) : 0)
-                                    spacing: Style.spacing.xxs
-                                    Repeater {
-                                        model: PresetBrowser.compactRows(browser.allPresets, browser.category,
-                                            browser.chosen ? browser.chosen.id : "")
-                                        delegate: Button {
-                                            required property var modelData
-                                            width: presetListColumn.width
-                                            height: Style.space(48)
-                                            focusable: true
-                                            leftAlign: true
-                                            text: modelData.name + "\n" + modelData.category + " · "
-                                                + modelData.durationMinutes + " min"
-                                                + (modelData.bpm ? " · " + modelData.bpm + " BPM" : "")
-                                                + " · " + modelData.visualLabel
-                                            selected: modelData.selected
-                                            foreground: Color.foreground
-                                            accent: Color.accent
-                                            onClicked: root.browserSelection = modelData.id
-                                        }
-                                    }
-                                }
-
-                                Rectangle {
-                                    visible: presetList.contentHeight > presetList.height
-                                    anchors.right: parent.right
-                                    width: Style.space(3)
-                                    radius: width / 2
-                                    color: Color.accent
-                                    opacity: 0.55
-                                    height: Math.max(Style.space(22), parent.height * parent.height / parent.contentHeight)
-                                    y: parent.contentY * (parent.height - height) / Math.max(1, parent.contentHeight - parent.height)
-                                }
-                            }
-                        }
-
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.preferredWidth: browser.narrow ? browser.width : Style.space(485)
-                            Layout.preferredHeight: browser.narrow ? Style.space(350) : Style.space(410)
-                            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.025)
-                            radius: Style.space(6)
-                            clip: true
+                        ColumnLayout {
+                            id: routineDetail
+                            width: routineDetailScroll.width - (routineDetailScroll.contentHeight > routineDetailScroll.height ? Style.space(8) : 0)
+                            spacing: Style.spacing.xs
 
                             ColumnLayout {
-                                id: detailColumn
-                                anchors.fill: parent
-                                anchors.margins: Style.space(10)
+                                visible: !routinesRoot.editorOpen
+                                Layout.fillWidth: true
                                 spacing: Style.spacing.xs
-                                readonly property var selectedItem: browser.chosen && browser.chosen.items.length ? browser.chosen.items[0] : null
 
                                 Text {
                                     Layout.fillWidth: true
-                                    text: browser.chosen ? browser.chosen.name : "No practice session"
+                                    text: routinesRoot.chosen ? routinesRoot.chosen.name
+                                        : (routinesRoot.subMode === "mine" ? "No saved routines" : "No practice session")
                                     color: Color.foreground
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.heading
                                     font.bold: true
-                                    elide: Text.ElideRight
+                                    wrapMode: Text.WordWrap
                                 }
                                 Text {
                                     Layout.fillWidth: true
+                                    text: routinesRoot.chosen
+                                        ? (routinesRoot.subMode === "presets" ? routinesRoot.chosen.category : "My Routine") : ""
+                                    color: Color.accent
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                }
+
+                                GridLayout {
+                                    visible: !!routinesRoot.chosen
+                                    Layout.fillWidth: true
+                                    columns: 3
+                                    columnSpacing: Style.spacing.md
+                                    rowSpacing: Style.spacing.xxs
+                                    Text {
+                                        text: "BPM  " + routinesRoot.suggestedBpm(routinesRoot.selectedItem)
+                                        color: Color.foreground; opacity: 0.72
+                                        font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                    }
+                                    Text {
+                                        text: "Duration  " + (routinesRoot.chosen ? PresetBrowser.totalMinutes(routinesRoot.chosen) : 0) + " min"
+                                        color: Color.foreground; opacity: 0.72
+                                        font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                    }
+                                    Text {
+                                        text: "Click  " + routinesRoot.metronomeSummary(routinesRoot.selectedItem)
+                                        color: Color.foreground; opacity: 0.72
+                                        font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                        elide: Text.ElideRight
+                                    }
+                                }
+
+                                PracticeVisual {
+                                    visible: !!routinesRoot.selectedItem && !!routinesRoot.selectedItem.visualAid
+                                    Layout.fillWidth: true
+                                    item: routinesRoot.selectedItem
+                                    board: root.previewBoard(routinesRoot.selectedItem)
+                                    stringLabels: root.previewStringLabels(routinesRoot.selectedItem)
+                                    toneData: root.previewToneData(routinesRoot.selectedItem)
+                                    voicings: root.previewVoicings(routinesRoot.selectedItem)
+                                    fretWindow: root.previewFretWindow(routinesRoot.selectedItem)
+                                    showFretboard: root.previewShowsFretboard(routinesRoot.selectedItem)
+                                    showChord: root.previewShowsChordDiagram(routinesRoot.selectedItem)
+                                }
+                                Text {
+                                    visible: !!routinesRoot.selectedItem && !routinesRoot.selectedItem.visualAid
+                                    Layout.fillWidth: true
+                                    text: "This custom item has no saved visual aid."
+                                    color: Color.foreground; opacity: 0.5
+                                    font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                }
+                                Text {
+                                    visible: !!routinesRoot.chosen
+                                    Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
-                                    text: browser.chosen ? browser.chosen.description : ""
+                                    text: routinesRoot.chosen ? (routinesRoot.chosen.description ||
+                                        (routinesRoot.chosen.items.length + " practice item" + (routinesRoot.chosen.items.length === 1 ? "" : "s"))) :
+                                        "Duplicate a built-in Practice Session to create a routine with its verified visual data."
                                     color: Color.foreground
                                     opacity: 0.76
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.body
                                 }
                                 Text {
+                                    visible: routinesRoot.selectedItem ? routinesRoot.selectedItem.notes !== "" : false
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
-                                    maximumLineCount: 3
-                                    elide: Text.ElideRight
-                                    text: detailColumn.selectedItem ? detailColumn.selectedItem.notes : ""
+                                    text: routinesRoot.selectedItem ? routinesRoot.selectedItem.notes : ""
                                     color: Color.foreground
-                                    opacity: 0.62
+                                    opacity: 0.64
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                 }
                                 Text {
-                                    visible: browser.chosen ? browser.chosen.items.length > 1 : false
+                                    visible: routinesRoot.chosen ? routinesRoot.chosen.items.length > 1 : false
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
-                                    text: browser.chosen ? "Sequence: " + browser.chosen.items.map(function (i) { return i.label }).join(" → ") : ""
+                                    text: routinesRoot.chosen ? "Routine order: "
+                                        + routinesRoot.chosen.items.map(function (item) { return item.label }).join(" → ") : ""
                                     color: Color.foreground
                                     opacity: 0.58
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                 }
-                                PracticeVisual {
+                            }
+
+                            ColumnLayout {
+                                visible: routinesRoot.editorOpen
+                                Layout.fillWidth: true
+                                spacing: Style.spacing.sm
+                                PanelSectionHeader { text: "Edit My Routine" }
+                                TextField {
                                     Layout.fillWidth: true
-                                    Layout.fillHeight: true
-                                    item: detailColumn.selectedItem
-                                    board: root.previewBoard(detailColumn.selectedItem)
-                                    stringLabels: root.previewStringLabels(detailColumn.selectedItem)
-                                    toneData: root.previewToneData(detailColumn.selectedItem)
-                                    voicings: root.previewVoicings(detailColumn.selectedItem)
-                                    fretWindow: root.previewFretWindow(detailColumn.selectedItem)
-                                    showFretboard: root.previewShowsFretboard(detailColumn.selectedItem)
-                                    showChord: root.previewShowsChordDiagram(detailColumn.selectedItem)
+                                    placeholderText: "Routine name"
+                                    text: routinesRoot.editorName
+                                    onTextChanged: routinesRoot.editorName = text
                                 }
-                                RowLayout {
+                                Text {
                                     Layout.fillWidth: true
-                                    Item { Layout.fillWidth: true }
-                                    Button {
-                                        focusable: true
-                                        text: "Duplicate"
-                                        foreground: Color.foreground
-                                        accent: Color.accent
-                                        enabled: !!browser.chosen
-                                        onClicked: if (root.service && browser.chosen) {
-                                            root.service.duplicatePreset(browser.chosen.id); routinesRoot.subMode = "mine"
+                                    text: "Reorder or remove items. Existing verified visual data stays attached to each item."
+                                    wrapMode: Text.WordWrap
+                                    color: Color.foreground; opacity: 0.62
+                                    font.family: Style.font.family; font.pixelSize: Style.font.caption
+                                }
+                                Repeater {
+                                    model: routinesRoot.editorItems
+                                    delegate: RowLayout {
+                                        id: editorItemRow
+                                        required property var modelData
+                                        required property int index
+                                        Layout.fillWidth: true
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: (editorItemRow.index + 1) + ". " + editorItemRow.modelData.label
+                                            elide: Text.ElideRight
+                                            color: Color.foreground
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.body
                                         }
-                                    }
-                                    Button {
-                                        focusable: true
-                                        text: "Start Practice"
-                                        bordered: true
-                                        foreground: Color.foreground
-                                        accent: Color.accent
-                                        enabled: !!browser.chosen
-                                        onClicked: if (root.service && browser.chosen) root.service.startPreset(browser.chosen.id)
+                                        Button { focusable: true; text: "↑"; foreground: Color.foreground; accent: Color.accent; onClicked: routinesRoot.editorItems = root.moveItem(routinesRoot.editorItems, editorItemRow.index, editorItemRow.index - 1) }
+                                        Button { focusable: true; text: "↓"; foreground: Color.foreground; accent: Color.accent; onClicked: routinesRoot.editorItems = root.moveItem(routinesRoot.editorItems, editorItemRow.index, editorItemRow.index + 1) }
+                                        Button { focusable: true; text: "Remove"; foreground: Color.foreground; accent: Color.accent; onClicked: routinesRoot.editorItems = routinesRoot.editorItems.filter(function (_, itemIndex) { return itemIndex !== editorItemRow.index }) }
                                     }
                                 }
                             }
                         }
-                    }
-                }
-            }
 
-            // ---- my routines (build + manage) ----
-            Component {
-                id: myRoutinesView
-                ColumnLayout {
-                    width: layout.width
-                    spacing: Style.spacing.md
-
-                    PanelSectionHeader { text: "Your Routines" }
-                    Repeater {
-                        model: root.service ? root.service.routines : []
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            spacing: Style.spacing.sm
-                            Text {
-                                Layout.fillWidth: true
-                                text: modelData.name + "  ·  " + modelData.items.length + " items"
-                                color: Color.foreground
-                                font.family: Style.font.family
-                                font.pixelSize: Style.font.body
-                            }
-                            Button { focusable: true; text: "Start"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.startRoutine(modelData.id) }
-                            Button { focusable: true; text: "Duplicate"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.duplicateRoutineById(modelData.id) }
-                            Button { focusable: true; text: "Delete"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.deleteRoutine(modelData.id) }
+                        Rectangle {
+                            visible: routineDetailScroll.contentHeight > routineDetailScroll.height
+                            anchors.right: parent.right
+                            width: Style.space(3)
+                            radius: width / 2
+                            color: Color.accent
+                            opacity: 0.55
+                            height: Math.max(Style.space(22), parent.height * parent.height / parent.contentHeight)
+                            y: parent.contentY * (parent.height - height) / Math.max(1, parent.contentHeight - parent.height)
                         }
                     }
-                    Text {
-                        visible: root.service ? root.service.routines.length === 0 : true
-                        text: "No routines yet. Duplicate a practice session from the Practice Sessions tab, or build one below."
-                        color: Color.foreground
-                        opacity: 0.5
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        wrapMode: Text.WordWrap
+
+                    RowLayout {
+                        visible: routinesRoot.editorOpen
                         Layout.fillWidth: true
-                    }
-
-                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.foreground; opacity: 0.18 }
-
-                    PanelSectionHeader { text: "Build a Routine" }
-                    RowLayout {
-                        spacing: Style.spacing.md
-                        TextField { id: newRoutineName; Layout.fillWidth: true; placeholderText: "Routine name" }
-                    }
-
-                    ColumnLayout {
-                        id: draftItems
-                        property var items: []
-                        spacing: Style.spacing.xs
-
-                        Repeater {
-                            model: draftItems.items
-                            delegate: RowLayout {
-                                required property var modelData
-                                required property int index
-                                Layout.fillWidth: true
-                                Text { Layout.fillWidth: true; text: (index + 1) + ". " + modelData.label + " (" + modelData.type + ")"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                                Button { focusable: true; text: "↑"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = root.moveItem(draftItems.items, index, index - 1) }
-                                Button { focusable: true; text: "↓"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = root.moveItem(draftItems.items, index, index + 1) }
-                                Button { focusable: true; text: "Remove"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = draftItems.items.filter(function (_, i) { return i !== index }) }
-                            }
-                        }
-                    }
-
-                    RowLayout {
-                        spacing: Style.spacing.md
-                        Dropdown {
-                            id: presetPicker
-                            label: "Preset"
-                            options: [{ value: "", label: "Custom" }].concat(Exercises.BUILTIN_EXERCISES.map(function (e) { return { value: e.id, label: e.name } }))
-                            value: ""
-                            onChanged: function (value) { presetPicker.value = value }
-                        }
-                        Dropdown {
-                            id: typePicker
-                            label: "Type"
-                            options: Routines.ITEM_TYPES.map(function (t) { return { value: t, label: t.replace(/_/g, " ") } })
-                            value: "custom"
-                            onChanged: function (value) { typePicker.value = value }
-                        }
-                        TextField { id: itemLabel; placeholderText: "Item label, e.g. Warmup" }
-                        NumberField { id: itemMinutes; label: "Minutes"; value: 5; from: 0; to: 120 }
-                        NumberField { id: itemTargetBpm; label: "Target BPM"; value: 0; from: 0; to: 300 }
-                    }
-                    RowLayout {
+                        Item { Layout.fillWidth: true }
+                        Button { focusable: true; text: "Cancel"; foreground: Color.foreground; accent: Color.accent; onClicked: routinesRoot.cancelEdit() }
                         Button {
-                            focusable: true
-                            text: "Add Item"
-                            bordered: true
-                            foreground: Color.foreground
-                            accent: Color.accent
-                            onClicked: {
-                                var preset = presetPicker.value ? Exercises.builtinExerciseById(presetPicker.value) : null
-                                draftItems.items = draftItems.items.concat([{
-                                    type: preset ? preset.type : typePicker.value,
-                                    label: itemLabel.text || (preset ? preset.name : "Practice item"),
-                                    durationMinutes: itemMinutes.value || null,
-                                    targetBpm: itemTargetBpm.value || (preset ? preset.targetBpm : null),
-                                    metronome: preset ? { startBpm: preset.startBpm } : null,
-                                    scaleKey: preset && preset.scaleId ? { key: root.service ? root.service.referenceKey : "C", scaleId: preset.scaleId } : null,
-                                    notes: ""
-                                }])
-                                itemLabel.text = ""
-                            }
+                            focusable: true; text: "Save Changes"; bordered: true
+                            foreground: Color.foreground; accent: Color.accent
+                            enabled: routinesRoot.editorName.trim().length > 0 && routinesRoot.editorItems.length > 0
+                            onClicked: routinesRoot.saveEdit()
+                        }
+                    }
+
+                    RowLayout {
+                        visible: !routinesRoot.editorOpen && !!routinesRoot.chosen
+                        Layout.fillWidth: true
+                        Item { Layout.fillWidth: true }
+                        Button {
+                            visible: routinesRoot.subMode === "mine"
+                            focusable: true; text: "Edit"
+                            foreground: Color.foreground; accent: Color.accent
+                            onClicked: routinesRoot.beginEdit()
                         }
                         Button {
                             focusable: true
-                            text: "Save Routine"
-                            bordered: true
-                            foreground: Color.foreground
-                            accent: Color.accent
-                            enabled: newRoutineName.text.length > 0 && draftItems.items.length > 0
+                            text: routinesRoot.subMode === "presets" ? "Duplicate to My Routines" : "Duplicate"
+                            foreground: Color.foreground; accent: Color.accent
+                            onClicked: routinesRoot.duplicateSelected()
+                        }
+                        Button {
+                            visible: routinesRoot.subMode === "mine"
+                            focusable: true; text: "Delete"
+                            foreground: Color.foreground; accent: Color.accent
+                            onClicked: routinesRoot.deleteSelected()
+                        }
+                        Button {
+                            focusable: true; text: "Start Practice"; bordered: true
+                            foreground: Color.foreground; accent: Color.accent
                             onClicked: {
-                                if (root.service) root.service.createRoutine(newRoutineName.text, draftItems.items)
-                                newRoutineName.text = ""
-                                draftItems.items = []
+                                if (!root.service || !routinesRoot.chosen) return
+                                if (routinesRoot.subMode === "mine") root.service.startRoutine(routinesRoot.chosen.id)
+                                else root.service.startPreset(routinesRoot.chosen.id)
                             }
                         }
                     }

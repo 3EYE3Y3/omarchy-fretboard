@@ -94,15 +94,51 @@ test("rhythm visual density agrees with each metronome subdivision and compound 
   assert.deepEqual(Array.from(sixEight.steps, (s, i) => s.accent ? i : -1).filter((i) => i >= 0), [0,3])
 })
 
-test("preset selection changes only selected flags and never list membership or row kind", () => {
+test("category filtering and dropdown selection always resolve one valid preset detail", () => {
   const all = Presets.PRESET_ROUTINES
-  const before = Browser.compactRows(all, "All", all[0].id)
-  const after = Browser.compactRows(all, "All", all[20].id)
-  assert.deepEqual(Array.from(after, (r) => r.id), Array.from(before, (r) => r.id))
-  assert.ok(after.every((r) => r.rowKind === "compact"))
-  assert.ok(after.every((r) => r.visualLabel.length <= 8))
-  assert.equal(after.filter((r) => r.selected).length, 1)
-  assert.equal(Browser.selectedPreset(all, "All", all[39].id).id, all[39].id)
-  for (const category of Presets.PRESET_CATEGORIES)
-    assert.ok(Browser.filteredPresets(all, category).every((p) => p.category === category))
+  for (const category of Presets.PRESET_CATEGORIES) {
+    const filtered = Browser.filteredPresets(all, category)
+    const options = Browser.routineOptions(filtered)
+    assert.ok(filtered.length > 0)
+    assert.ok(filtered.every((p) => p.category === category))
+    assert.deepEqual(Array.from(options, (o) => o.value), Array.from(filtered, (p) => p.id))
+    for (const option of options)
+      assert.equal(Browser.selectedPreset(all, category, option.value).id, option.value)
+  }
+})
+
+test("selector source switching, invalid IDs, deletion and persisted selection fall back safely", () => {
+  const presets = Presets.PRESET_ROUTINES
+  const categories = Presets.PRESET_CATEGORIES
+  const mine = [{ id: "mine-a", name: "A", items: [] }, { id: "mine-b", name: "B", items: [] }]
+  const presetState = Browser.selectorState("presets", presets, categories, mine,
+    { routineCategory: "Scales", routinePresetId: "missing" })
+  assert.equal(presetState.source, "presets")
+  assert.equal(presetState.category, "Scales")
+  assert.equal(presetState.selected.id, presetState.routines[0].id)
+  const persisted = Browser.selectorState("presets", presets, categories, mine,
+    { routineCategory: "Rhythm", routinePresetId: "preset-rhythm-6-8-groove" })
+  assert.equal(persisted.selected.id, "preset-rhythm-6-8-groove")
+  const userState = Browser.selectorState("mine", presets, categories, mine,
+    { routineUserId: "mine-b" })
+  assert.equal(userState.selected.id, "mine-b")
+  const afterDelete = Browser.selectorState("mine", presets, categories, mine.slice(0, 1),
+    { routineUserId: "mine-b" })
+  assert.equal(afterDelete.selected.id, "mine-a")
+  assert.equal(Browser.selectorState("mine", presets, categories, [], {}).selected, null)
+  assert.equal(Browser.normalizeCategory(categories, "removed"), "All")
+  assert.equal(Browser.normalizeSource("removed"), "presets")
+})
+
+test("every built-in preset is selectable once and its selected detail retains valid visual data", () => {
+  const options = Browser.routineOptions(Presets.PRESET_ROUTINES)
+  assert.equal(options.length, 40)
+  assert.equal(new Set(Array.from(options, (o) => o.value)).size, 40)
+  for (const option of options) {
+    const chosen = Browser.selectedPreset(Presets.PRESET_ROUTINES, "All", option.value)
+    assert.equal(chosen.id, option.value)
+    assert.ok(chosen.items.length > 0)
+    assert.ok(chosen.items[0].visualAid)
+    assert.ok(Visual.MODES.includes(chosen.items[0].visualAid.mode))
+  }
 })

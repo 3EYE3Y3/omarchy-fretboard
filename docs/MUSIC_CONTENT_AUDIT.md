@@ -1,5 +1,12 @@
 # Fretboard music-content correctness audit
 
+## v0.3.5 routine-selector follow-up
+
+The Practice UI now resolves category and routine dropdowns to one bounded detail
+view. No preset definitions, theory formulas, shape coordinates, voicings, tunings or
+rhythm data changed. All 40 presets and 73 items retain the v0.3.4 visual contract and
+the v0.3.3 full-fretboard correctness fixtures.
+
 ## v0.3.4 position/highlight and practice-visual follow-up
 
 Reference now retains complete scale/chord-tone context while independently

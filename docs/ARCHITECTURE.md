@@ -152,9 +152,15 @@ Reference selection adds a second dimension without changing membership:
 `highlighted` means a valid pitch-set member, while `isEmphasized` means the cell is
 part of the verified selected box or triad shape. `PracticeVisual.qml` routes every
 built-in item through shared fretboard, chord-diagram and wrapping sequence-grid
-components. `preset_browser.js` projects immutable compact list rows; selection is
-resolved separately into the master/detail preview and cannot alter row height or
-list membership.
+components. `preset_browser.js` resolves a sanitized source/category/selection into
+dropdown options and exactly one detail object. The fixed-height detail surface owns
+vertical scrolling; no simultaneous list is instantiated.
+
+Routine selector preferences store Practice Sessions/My Routines independently,
+including the built-in category and the most recent valid ID for each source. Invalid
+categories or IDs safely resolve to All/first available without producing an empty
+detail pane. The same `PracticeVisual` receives the active item in the running panel,
+so starting a routine does not discard its teaching diagram.
 
 `panel/FretboardGrid.qml` renders either the complete pitch-class membership map or
 only those exact coordinates. `panel/ChordDiagram.qml` renders an audited shape from

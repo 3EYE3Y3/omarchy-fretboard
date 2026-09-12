@@ -1,16 +1,52 @@
 .pragma library
 
-// Selection belongs to the detail pane. Compact list rows are a stable
-// projection of the source presets and never absorb description/visual state.
+// Pure selector state shared by QML and regression tests. The UI renders one
+// selected routine only; no list-row/detail coupling is allowed here.
+var SOURCES = ["presets", "mine"]
+
+function normalizeSource(source) {
+    return SOURCES.indexOf(source) >= 0 ? source : "presets"
+}
+
+function normalizeCategory(categories, category) {
+    var values = ["All"].concat(categories || [])
+    return values.indexOf(category) >= 0 ? category : "All"
+}
+
 function filteredPresets(presets, category) {
     var all = presets || []
     return !category || category === "All" ? all.slice() : all.filter(function (p) { return p.category === category })
 }
 
+function selectedRoutine(routines, selectedId) {
+    var all = routines || []
+    for (var i = 0; i < all.length; i++) if (all[i].id === selectedId) return all[i]
+    return all.length ? all[0] : null
+}
+
 function selectedPreset(presets, category, selectedId) {
+    return selectedRoutine(filteredPresets(presets, category), selectedId)
+}
+
+function routineOptions(routines) {
+    return (routines || []).map(function (routine) {
+        return { value: routine.id, label: routine.name }
+    })
+}
+
+function selectorState(source, presets, categories, routines, preferences) {
+    var prefs = preferences || {}
+    var normalizedSource = normalizeSource(source || prefs.routineSource)
+    if (normalizedSource === "mine") {
+        var userRoutine = selectedRoutine(routines, prefs.routineUserId || "")
+        return { source: normalizedSource, category: "All", routines: (routines || []).slice(),
+            selected: userRoutine, selectedId: userRoutine ? userRoutine.id : "" }
+    }
+    var category = normalizeCategory(categories, prefs.routineCategory || "All")
     var visible = filteredPresets(presets, category)
-    for (var i = 0; i < visible.length; i++) if (visible[i].id === selectedId) return visible[i]
-    return visible.length ? visible[0] : null
+    var preset = selectedRoutine(visible, prefs.routinePresetId || "")
+    return { source: normalizedSource, category: category, routines: visible,
+        selected: preset, selectedId: preset ? preset.id : "" }
 }
 
 function totalMinutes(preset) {
@@ -18,23 +54,4 @@ function totalMinutes(preset) {
     var items = preset && preset.items ? preset.items : []
     for (var i = 0; i < items.length; i++) total += Number(items[i].durationMinutes || 0)
     return total
-}
-
-function visualLabel(mode) {
-    var labels = {
-        FULL_FRETBOARD_SCALE: "map", POSITION: "position", PENTATONIC_BOX: "box",
-        THREE_NOTES_PER_STRING: "3NPS", TRIAD_SHAPE: "triad", CHORD_SHAPE: "chord",
-        PATTERN: "pattern", FRETBOARD_PATH: "path", RHYTHM_GRID: "rhythm", PICKING_PATTERN: "picking"
-    }
-    return labels[mode] || "visual"
-}
-
-function compactRows(presets, category, selectedId) {
-    return filteredPresets(presets, category).map(function (preset) {
-        var bpm = preset.items && preset.items.length ? preset.items[0].targetBpm : null
-        var mode = preset.items && preset.items.length && preset.items[0].visualAid ? preset.items[0].visualAid.mode : ""
-        return { id: preset.id, name: preset.name, category: preset.category,
-            durationMinutes: totalMinutes(preset), bpm: bpm, visualMode: mode, visualLabel: visualLabel(mode),
-            selected: preset.id === selectedId, rowKind: "compact" }
-    })
 }

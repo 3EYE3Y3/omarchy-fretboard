@@ -2,6 +2,27 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.5] - 2026-09-13
+
+Routine-selector layout release. Marketplace preparation remains paused pending
+personal review.
+
+### Changed
+- Replaced the simultaneous routine-list/detail browser with two compact dropdowns:
+  Category and Routine. Only the selected routine's detail and teaching visual are
+  instantiated below them.
+- Practice Sessions and My Routines share the same selector/detail interaction.
+  Built-in category filters, user-routine editing/deletion, duplication and starting
+  remain available without adding a second navigation layout.
+- Routine detail is vertically scrollable inside a fixed-height surface while the
+  selectors and action bar remain reachable at 800×660 and 600×660.
+- Persisted source, category, built-in selection and user-routine selection are
+  sanitized independently, with safe first-item fallback after filtering or deletion.
+
+### Added
+- Selector regression coverage for all categories, every built-in preset, source
+  switching, persisted IDs, invalid/deleted fallback and selected visual resolution.
+
 ## [0.3.4] - 2026-09-13
 
 Position-highlight and practice-visual release. Marketplace preparation remains

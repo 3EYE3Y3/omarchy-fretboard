@@ -3,7 +3,7 @@
 ## Automated
 
 ```bash
-npm test                                        # 133 tests, node:test + node:assert/strict
+npm test                                        # 136 tests, node:test + node:assert/strict
 python3 -m unittest discover -s helper/tests    # 30 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
@@ -27,7 +27,7 @@ reimplementation drift between "the logic" and "the tested logic."
 | Persistence & migration | `js/storage.js` / `tests/storage.test.mjs` | Empty/missing file, well-formed round-trip, invalid JSON, malformed-entry recovery, missing-key backfill, schema-version migration flag, preference clamping, tuner-sensitivity default-fill/rejection |
 | Practice-session presets | `js/presets.js` / `tests/presets.test.mjs` | All 7 categories present, curated size (not empty, not hundreds), unique/stable/namespaced ids, every scale/chord reference is a real id + valid note name, item shape matches `routines.js`'s `createItem` exactly (drift guard), a diatonic-triad-style progression produces one item per chord in order, duplicating a preset clears the `preset` flag and never mutates the source (JSON diff before/after), duplicating a multi-item chord progression preserves every chord |
 | Independent canonical music fixtures | `tests/canonical_music.test.mjs` | Exact A-minor-pentatonic Boxes 1–5 and root coordinates, E-minor Box 1/transposition, literal six-string 0–12 maps for A minor pentatonic/C major/G major/A natural minor/D Dorian, open strings, roots, interval coverage, alternate-tuning recalculation, all formulas in all roots, E-major 3NPS, triad inversions, exact conventional chord shapes, tuning restrictions, and every positional preset coordinate |
-| Position/practice visual contract | `tests/visual_system.test.mjs` | Full context plus exact Box 1–5 emphasis, octave-equivalent 0–12 shapes, roots, A major/minor inversion and four-string-set filters, diminished/augmented triads, all 73 items having a supported/valid visual, rhythm/metronome agreement, correct 6/8 grouping, and stable compact browser rows/list membership across selection |
+| Position/practice visual contract | `tests/visual_system.test.mjs` | Full context plus exact Box 1–5 emphasis, octave-equivalent 0–12 shapes, roots, A major/minor inversion and four-string-set filters, diminished/augmented triads, all 73 items having a supported/valid visual, rhythm/metronome agreement, correct 6/8 grouping, category-filtered dropdown options, source switching and safe stale/deleted selection fallback |
 | Manifest | `manifest.json` / `tests/manifest.test.mjs` | Schema version, non-reserved id, every kind has a matching, existing entry point |
 | Click-schedule math (Python) | `helper/click_schedule.py` / `helper/tests/test_click_schedule.py` | Same tick/beat/accent math as `js/metronome.js`, verified independently on the audio engine's own side |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
@@ -38,6 +38,17 @@ file (informational — the shared `qs.Ui`/`qs.Commons` singletons trip a handfu
 known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
+
+## Manual routine-selector review (v0.3.5)
+
+Production `Service` and `PracticeSection` components were rendered through
+Quickshell's Qt offscreen backend at 800×660 and 600×660 with isolated state storage.
+All seven category filters resolved valid dropdown options and details. First, middle
+and last selections were changed rapidly; Practice Sessions was switched to a
+duplicated My Routine and back; the Routine popup opened; and 6/8 was started. The
+Running view retained `RHYTHM_GRID`. Both sizes kept the two selectors, single bounded
+detail, fixed actions and all content inside the frame. No binding-loop or runtime QML
+errors were logged.
 
 ## Manual position/practice review (v0.3.4)
 
@@ -75,20 +86,18 @@ full `omarchy restart shell` rather than just a file save):
 
 - [x] Practice opens on Metronome by default; **Routines is the second tab**, beside
       Metronome, ahead of Tempo Trainer and Timer
-- [x] The preset library (Practice Sessions) is immediately visible under Routines,
-      with category chips (All, Warmups, Scales, Scale Patterns, Triads, Chords,
-      Technique, Rhythm) and a Start/Duplicate button per preset
-- [x] Selecting a preset expands an inline preview: description, instructions,
-      sequence (for multi-item progressions), pattern text, and a live fretboard
-      diagram with fret numbers, string names, and root/scale-tone highlighting —
-      verified against "Minor Pentatonic — Box 1"
+- [x] Practice Sessions opens with Category and Routine dropdowns. All, Warmups,
+      Scales, Scale Patterns, Triads, Chords, Technique and Rhythm filter the routine
+      options without rendering a simultaneous list
+- [x] Selecting a routine replaces the single bounded detail: description,
+      instructions, sequence, visual and fixed Start/Duplicate actions — verified
+      against "Minor Pentatonic — Box 1"
 - [x] `startPreset` (via the new IPC method) on "Alternate Picking" correctly
       configured the metronome (70 BPM, eighth-note subdivision), started the click
       audibly, and the bar icon/panel header both reflected the running BPM live
 - [x] The Routines running view shows the same visual aid (fretboard + pattern text
       "↓ ↑ ↓ ↑ ↓ ↑ ↓ ↑"), current BPM with +/-/mute controls, a live countdown timer,
-      and Finish/Stop Routine — all while the Practice Sessions browser remains
-      visible below it
+      and Finish/Stop Routine; the selector/detail view is replaced while running
 - [x] Tuner tab shows the new Tuner Sensitivity dropdown (Quiet/Normal/Noisy Room,
       default Normal) with an explanatory hint, alongside the existing device picker
       and A4 field
