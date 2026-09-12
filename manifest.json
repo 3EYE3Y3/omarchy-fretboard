@@ -1,0 +1,32 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.3eye3y3.fretboard",
+  "name": "Fretboard",
+  "version": "0.3.0",
+  "author": "3EYE3Y3",
+  "license": "MIT",
+  "description": "A guitar practice companion for the Omarchy bar: metronome, tempo trainer, practice timer, chromatic tuner, fretboard/scale/chord reference, and practice routines with history.",
+  "kinds": ["service", "bar-widget"],
+  "entryPoints": {
+    "service": "Service.qml",
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Fretboard",
+    "description": "Metronome, tuner, and guitar reference. Click to open the practice panel.",
+    "category": "Music",
+    "defaultSection": "right",
+    "allowMultiple": false,
+    "defaults": {
+      "showBpmInBar": true
+    },
+    "schema": [
+      {
+        "key": "showBpmInBar",
+        "type": "boolean",
+        "label": "Show BPM in the bar when the metronome is running",
+        "defaultValue": true
+      }
+    ]
+  }
+}
