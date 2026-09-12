@@ -18,6 +18,13 @@ Item {
 
     Component.onCompleted: if (root.service) root.service.refreshTunerDevices()
 
+    function sensitivityHint() {
+        var value = root.service ? root.service.tunerSensitivity() : "normal"
+        if (value === "quiet") return "Picks up softer, quieter playing - best in a silent room."
+        if (value === "noisy_room") return "Needs a louder, clearer note before it will lock - best with background noise."
+        return "Balanced default for an ordinary room."
+    }
+
     ColumnLayout {
         id: layout
         width: parent.width
@@ -48,6 +55,29 @@ Item {
                 to: 466
                 stepSize: 1
                 onModified: function (value) { if (root.service) root.service.setReferencePitch(value) }
+            }
+        }
+
+        RowLayout {
+            Layout.fillWidth: true
+            Dropdown {
+                label: "Tuner Sensitivity"
+                options: [
+                    { value: "quiet", label: "Quiet" },
+                    { value: "normal", label: "Normal" },
+                    { value: "noisy_room", label: "Noisy Room" }
+                ]
+                value: root.service ? root.service.tunerSensitivity() : "normal"
+                onChanged: function (value) { if (root.service) root.service.setTunerSensitivity(value) }
+            }
+            Text {
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: root.sensitivityHint()
+                color: Color.foreground
+                opacity: 0.55
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
             }
         }
 

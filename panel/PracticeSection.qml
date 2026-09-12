@@ -6,21 +6,26 @@ import qs.Ui
 import "../js/metronome.js" as Metronome
 import "../js/routines.js" as Routines
 import "../js/exercises.js" as Exercises
+import "../js/theory.js" as Theory
+import "../js/fretboard.js" as Fretboard
+import "../js/chord_voicings.js" as Voicings
 
 Item {
     id: root
     property var service: null
     property var bar: null
-    property string mode: "metronome" // metronome | trainer | timer | routines
+    property string mode: "metronome" // metronome | routines | trainer | timer
 
     implicitHeight: layout.implicitHeight
     Layout.fillWidth: true
 
+    // Routines sits second, right beside Metronome - the two tools most
+    // practice sessions actually open with.
     readonly property var modeOptions: [
         { value: "metronome", label: "Metronome" },
+        { value: "routines", label: "Routines" },
         { value: "trainer", label: "Tempo Trainer" },
-        { value: "timer", label: "Timer" },
-        { value: "routines", label: "Routines" }
+        { value: "timer", label: "Timer" }
     ]
 
     ColumnLayout {
@@ -352,149 +357,477 @@ Item {
         return m + ":" + (s < 10 ? "0" : "") + s
     }
 
-    // ------------------------------------------------------------ routines
+    // ------------------------------------------------------------ preview helpers (read-only - never touch live reference state)
+    function previewToneData(item) {
+        if (!item) return null
+        if (item.scaleKey) return Theory.buildScale(item.scaleKey.key, item.scaleKey.scaleId)
+        if (item.chordKey) return Theory.buildChord(item.chordKey.key, item.chordKey.chordId)
+        return null
+    }
+
+    function previewBoard(item) {
+        if (!root.service) return null
+        var tones = previewToneData(item)
+        if (!tones) return null
+        var tuning = root.service.currentTuning()
+        var board = Fretboard.buildFretboard(tuning.notes, root.service.fretCount)
+        return Fretboard.highlightFretboard(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass)
+    }
+
+    function previewVoicings(item) {
+        if (!root.service || !item || !item.chordKey) return []
+        var tuning = root.service.currentTuning()
+        var chord = Theory.buildChord(item.chordKey.key, item.chordKey.chordId)
+        if (!chord) return []
+        return Voicings.findVoicings(tuning.notes, Theory.pitchClassSet(chord.notes), chord.rootPitchClass)
+    }
+
+    function previewFretWindow(item) {
+        if (!root.service || !item) return null
+        if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
+        var tones = previewToneData(item)
+        if (!tones) return null
+        return Fretboard.findPositionWindow(root.service.currentTuning().notes, Theory.pitchClassSet(tones.notes), root.service.fretCount, 5)
+    }
+
+    function stringLabelsFor(service) {
+        var tuning = service ? service.currentTuning() : null
+        if (!tuning) return []
+        return tuning.notes.map(function (n) { return n.replace(/[0-9-]/g, "") })
+    }
+
+    // ------------------------------------------------------------ routines (presets + my routines + running)
     Component {
         id: routinesView
         ColumnLayout {
+            id: routinesRoot
             width: layout.width
             spacing: Style.spacing.md
+            property string subMode: "presets" // presets | mine
+            property string selectedPresetId: ""
 
+            // ---- running panel: shown prominently whenever a routine is active ----
             ColumnLayout {
                 visible: root.service ? !!root.service.activeRoutine : false
                 Layout.fillWidth: true
-                spacing: Style.spacing.xs
+                spacing: Style.spacing.sm
 
-                PanelSectionHeader { text: "Running: " + (root.service && root.service.activeRoutine ? root.service.activeRoutine.name : "") }
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.accent; opacity: 0.35 }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    PanelSectionHeader { text: "Running: " + (root.service && root.service.activeRoutine ? root.service.activeRoutine.name : "") }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: root.service ? Math.round(root.service.activeRoutine && root.service.activeRun ? 100 * (root.service.activeRun.currentIndex / Math.max(1, root.service.activeRoutine.items.length)) : 0) + "%" : ""
+                        color: Color.foreground
+                        opacity: 0.6
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                    }
+                }
+
                 Text {
-                    text: root.service && root.service.activeRun ? "Now: " + (Routines.currentItem(root.service.activeRoutine, root.service.activeRun) || {}).label : ""
+                    text: root.service && root.service.activeItem() ? root.service.activeItem().label : ""
                     color: Color.foreground
                     font.family: Style.font.family
-                    font.pixelSize: Style.font.subtitle
+                    font.pixelSize: Style.font.heading
                     font.bold: true
                 }
                 Text {
-                    text: root.service && root.service.activeRun && Routines.nextItem(root.service.activeRoutine, root.service.activeRun)
-                        ? "Next: " + Routines.nextItem(root.service.activeRoutine, root.service.activeRun).label : "Last item"
+                    visible: root.service && root.service.activeItem() ? root.service.activeItem().notes !== "" : false
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: root.service && root.service.activeItem() ? root.service.activeItem().notes : ""
+                    color: Color.foreground
+                    opacity: 0.75
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.body
+                }
+
+                // Pattern/sequence text, when the item has one.
+                ColumnLayout {
+                    visible: root.service && root.service.activeItem() && root.service.activeItem().pattern
+                    spacing: Style.spacing.xxs
+                    Repeater {
+                        model: root.service && root.service.activeItem() && root.service.activeItem().pattern ? root.service.activeItem().pattern : []
+                        delegate: Text {
+                            required property string modelData
+                            text: "•  " + modelData
+                            color: Color.foreground
+                            opacity: 0.85
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+                    }
+                }
+
+                // Visual aid: whatever the current item is actually about.
+                FretboardGrid {
+                    visible: root.service ? !!root.service.currentToneData() : false
+                    Layout.fillWidth: true
+                    board: root.service ? root.service.currentFretboard() : null
+                    stringLabels: root.stringLabelsFor(root.service)
+                    showIntervals: root.service ? root.service.showIntervals : false
+                    toneData: root.service ? root.service.currentToneData() : null
+                    startFret: root.service && root.service.activeItemFretWindow() ? root.service.activeItemFretWindow().startFret : 0
+                    endFret: root.service && root.service.activeItemFretWindow() ? root.service.activeItemFretWindow().endFret : -1
+                }
+                RowLayout {
+                    visible: root.service ? root.service.referenceMode === "chord" : false
+                    spacing: Style.spacing.lg
+                    Repeater {
+                        model: root.service ? root.service.currentChordVoicings() : []
+                        delegate: ChordDiagram {
+                            required property var modelData
+                            voicing: modelData
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.lg
+                    Text {
+                        text: (root.service ? root.service.metronomeBpm : "") + " BPM"
+                        color: Color.accent
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.title
+                        font.bold: true
+                    }
+                    Button { focusable: true; text: "−"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.adjustMetronomeBpm(-1) }
+                    Button { focusable: true; text: "+"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.adjustMetronomeBpm(1) }
+                    Button {
+                        focusable: true
+                        text: root.service && root.service.metronomeRunning ? "Mute Click" : "Unmute Click"
+                        foreground: Color.foreground
+                        accent: Color.accent
+                        onClicked: if (root.service) root.service.toggleMetronome()
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        visible: root.service ? root.service.practiceTimerTotalSeconds > 0 : false
+                        text: root.formatSeconds(root.service ? root.service.practiceTimerRemainingSeconds : 0)
+                        color: Color.foreground
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.title
+                        font.bold: true
+                    }
+                    Button {
+                        focusable: true
+                        visible: root.service ? root.service.practiceTimerTotalSeconds > 0 : false
+                        text: root.service && root.service.practiceTimerRunning ? "Pause" : "Resume"
+                        foreground: Color.foreground
+                        accent: Color.accent
+                        onClicked: {
+                            if (!root.service) return
+                            if (root.service.practiceTimerRunning) root.service.pausePracticeTimer()
+                            else root.service.resumePracticeTimer()
+                        }
+                    }
+                }
+
+                Text {
+                    visible: root.service ? root.service.activeNextItem() !== null : false
+                    text: root.service && root.service.activeNextItem() ? "Next: " + root.service.activeNextItem().label : ""
                     color: Color.foreground
                     opacity: 0.6
                     font.family: Style.font.family
                     font.pixelSize: Style.font.caption
                 }
+
+                // Outcome prompt for a tempo-tracked item, otherwise a plain advance button.
                 RowLayout {
+                    visible: root.service ? root.service.routineAwaitingOutcome : false
                     spacing: Style.spacing.md
-                    Button { focusable: true; text: "Next Item"; bordered: true; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.advanceRoutine() }
+                    Text { text: "How did that go?"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                    Button { focusable: true; text: "Clean"; bordered: true; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.completeRoutineItem("clean") }
+                    Button { focusable: true; text: "Nearly"; bordered: true; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.completeRoutineItem("nearly") }
+                    Button { focusable: true; text: "Needs Work"; bordered: true; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.completeRoutineItem("needs_work") }
+                }
+                RowLayout {
+                    visible: root.service ? !root.service.routineAwaitingOutcome : true
+                    spacing: Style.spacing.md
+                    Button {
+                        focusable: true
+                        text: root.service && root.service.activeNextItem() ? "Next Item" : "Finish"
+                        bordered: true
+                        foreground: Color.foreground
+                        accent: Color.accent
+                        onClicked: if (root.service) root.service.requestAdvanceRoutine()
+                    }
                     Button { focusable: true; text: "Stop Routine"; bordered: true; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.stopRoutine() }
                 }
+
                 Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.foreground; opacity: 0.18 }
             }
 
-            PanelSectionHeader { text: "Your Routines" }
-            Repeater {
-                model: root.service ? root.service.routines : []
-                delegate: RowLayout {
-                    required property var modelData
-                    Layout.fillWidth: true
-                    spacing: Style.spacing.sm
+            ButtonGroup {
+                Layout.fillWidth: true
+                options: [{ value: "presets", label: "Practice Sessions" }, { value: "mine", label: "My Routines" }]
+                value: routinesRoot.subMode
+                foreground: Color.foreground
+                accent: Color.accent
+                onChanged: function (value) { routinesRoot.subMode = value }
+            }
+
+            Loader {
+                Layout.fillWidth: true
+                sourceComponent: routinesRoot.subMode === "mine" ? myRoutinesView : presetsView
+            }
+
+            // ---- presets browser ----
+            Component {
+                id: presetsView
+                ColumnLayout {
+                    width: layout.width
+                    spacing: Style.spacing.md
+                    property string category: "All"
+
+                    ButtonGroup {
+                        Layout.fillWidth: true
+                        options: ["All"].concat(root.service ? root.service.presetCategories() : [])
+                        value: category
+                        foreground: Color.foreground
+                        accent: Color.accent
+                        onChanged: function (value) { category = value }
+                    }
+
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: Style.spacing.xs
+                        Repeater {
+                            model: {
+                                var all = root.service ? root.service.allPresets() : []
+                                return category === "All" ? all : all.filter(function (p) { return p.category === category })
+                            }
+                            delegate: ColumnLayout {
+                                required property var modelData
+                                Layout.fillWidth: true
+                                spacing: Style.spacing.xxs
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.spacing.sm
+                                    Button {
+                                        focusable: true
+                                        text: modelData.name
+                                        leftAlign: true
+                                        Layout.fillWidth: true
+                                        foreground: Color.foreground
+                                        accent: Color.accent
+                                        selected: routinesRoot.selectedPresetId === modelData.id
+                                        onClicked: routinesRoot.selectedPresetId = (routinesRoot.selectedPresetId === modelData.id ? "" : modelData.id)
+                                    }
+                                    Text { text: modelData.category; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                                    Button { focusable: true; text: "Start"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.startPreset(modelData.id) }
+                                    Button {
+                                        focusable: true
+                                        text: "Duplicate"
+                                        foreground: Color.foreground
+                                        accent: Color.accent
+                                        onClicked: if (root.service) { root.service.duplicatePreset(modelData.id); routinesRoot.subMode = "mine" }
+                                    }
+                                }
+
+                                ColumnLayout {
+                                    visible: routinesRoot.selectedPresetId === modelData.id
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: Style.space(12)
+                                    Layout.bottomMargin: Style.space(8)
+                                    spacing: Style.spacing.xs
+
+                                    Text {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        text: modelData.description
+                                        color: Color.foreground
+                                        opacity: 0.75
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.body
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.WordWrap
+                                        visible: modelData.items[0].notes !== ""
+                                        text: modelData.items[0].notes
+                                        color: Color.foreground
+                                        opacity: 0.6
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                    }
+                                    Text {
+                                        visible: modelData.items.length > 1
+                                        text: "Sequence: " + modelData.items.map(function (i) { return i.label }).join(" → ")
+                                        color: Color.foreground
+                                        opacity: 0.6
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                        wrapMode: Text.WordWrap
+                                        Layout.fillWidth: true
+                                    }
+                                    ColumnLayout {
+                                        visible: !!modelData.items[0].pattern
+                                        spacing: Style.spacing.xxs
+                                        Repeater {
+                                            model: modelData.items[0].pattern || []
+                                            delegate: Text {
+                                                required property string modelData
+                                                text: "•  " + modelData
+                                                color: Color.foreground
+                                                opacity: 0.7
+                                                font.family: Style.font.family
+                                                font.pixelSize: Style.font.caption
+                                            }
+                                        }
+                                    }
+
+                                    FretboardGrid {
+                                        visible: !!root.previewToneData(modelData.items[0])
+                                        Layout.fillWidth: true
+                                        Layout.preferredHeight: Style.space(160)
+                                        board: root.previewBoard(modelData.items[0])
+                                        stringLabels: root.stringLabelsFor(root.service)
+                                        toneData: root.previewToneData(modelData.items[0])
+                                        startFret: root.previewFretWindow(modelData.items[0]) ? root.previewFretWindow(modelData.items[0]).startFret : 0
+                                        endFret: root.previewFretWindow(modelData.items[0]) ? root.previewFretWindow(modelData.items[0]).endFret : -1
+                                    }
+                                    RowLayout {
+                                        visible: !!modelData.items[0].chordKey
+                                        spacing: Style.spacing.lg
+                                        Repeater {
+                                            model: root.previewVoicings(modelData.items[0])
+                                            delegate: ChordDiagram {
+                                                required property var modelData
+                                                voicing: modelData
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---- my routines (build + manage) ----
+            Component {
+                id: myRoutinesView
+                ColumnLayout {
+                    width: layout.width
+                    spacing: Style.spacing.md
+
+                    PanelSectionHeader { text: "Your Routines" }
+                    Repeater {
+                        model: root.service ? root.service.routines : []
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: Style.spacing.sm
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData.name + "  ·  " + modelData.items.length + " items"
+                                color: Color.foreground
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.body
+                            }
+                            Button { focusable: true; text: "Start"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.startRoutine(modelData.id) }
+                            Button { focusable: true; text: "Duplicate"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.duplicateRoutineById(modelData.id) }
+                            Button { focusable: true; text: "Delete"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.deleteRoutine(modelData.id) }
+                        }
+                    }
                     Text {
-                        Layout.fillWidth: true
-                        text: modelData.name + "  ·  " + modelData.items.length + " items"
+                        visible: root.service ? root.service.routines.length === 0 : true
+                        text: "No routines yet. Duplicate a practice session from the Practice Sessions tab, or build one below."
                         color: Color.foreground
+                        opacity: 0.5
                         font.family: Style.font.family
-                        font.pixelSize: Style.font.body
-                    }
-                    Button { focusable: true; text: "Start"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.startRoutine(modelData.id) }
-                    Button { focusable: true; text: "Duplicate"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.duplicateRoutineById(modelData.id) }
-                    Button { focusable: true; text: "Delete"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.deleteRoutine(modelData.id) }
-                }
-            }
-            Text {
-                visible: root.service ? root.service.routines.length === 0 : true
-                text: "No routines yet. Build one below."
-                color: Color.foreground
-                opacity: 0.5
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
-
-            Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.foreground; opacity: 0.18 }
-
-            PanelSectionHeader { text: "Build a Routine" }
-            RowLayout {
-                spacing: Style.spacing.md
-                TextField { id: newRoutineName; Layout.fillWidth: true; placeholderText: "Routine name" }
-            }
-
-            ColumnLayout {
-                id: draftItems
-                property var items: []
-                spacing: Style.spacing.xs
-
-                Repeater {
-                    model: draftItems.items
-                    delegate: RowLayout {
-                        required property var modelData
-                        required property int index
+                        font.pixelSize: Style.font.caption
+                        wrapMode: Text.WordWrap
                         Layout.fillWidth: true
-                        Text { Layout.fillWidth: true; text: (index + 1) + ". " + modelData.label + " (" + modelData.type + ")"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
-                        Button { focusable: true; text: "↑"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = root.moveItem(draftItems.items, index, index - 1) }
-                        Button { focusable: true; text: "↓"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = root.moveItem(draftItems.items, index, index + 1) }
-                        Button { focusable: true; text: "Remove"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = draftItems.items.filter(function (_, i) { return i !== index }) }
                     }
-                }
-            }
 
-            RowLayout {
-                spacing: Style.spacing.md
-                Dropdown {
-                    id: presetPicker
-                    label: "Preset"
-                    options: [{ value: "", label: "Custom" }].concat(Exercises.BUILTIN_EXERCISES.map(function (e) { return { value: e.id, label: e.name } }))
-                    value: ""
-                    onChanged: function (value) { presetPicker.value = value }
-                }
-                Dropdown {
-                    id: typePicker
-                    label: "Type"
-                    options: Routines.ITEM_TYPES.map(function (t) { return { value: t, label: t.replace(/_/g, " ") } })
-                    value: "custom"
-                    onChanged: function (value) { typePicker.value = value }
-                }
-                TextField { id: itemLabel; placeholderText: "Item label, e.g. Warmup" }
-                NumberField { id: itemMinutes; label: "Minutes"; value: 5; from: 0; to: 120 }
-                NumberField { id: itemTargetBpm; label: "Target BPM"; value: 0; from: 0; to: 300 }
-            }
-            RowLayout {
-                Button {
-                    focusable: true
-                    text: "Add Item"
-                    bordered: true
-                    foreground: Color.foreground
-                    accent: Color.accent
-                    onClicked: {
-                        var preset = presetPicker.value ? Exercises.builtinExerciseById(presetPicker.value) : null
-                        draftItems.items = draftItems.items.concat([{
-                            type: preset ? preset.type : typePicker.value,
-                            label: itemLabel.text || (preset ? preset.name : "Practice item"),
-                            durationMinutes: itemMinutes.value || null,
-                            targetBpm: itemTargetBpm.value || (preset ? preset.targetBpm : null),
-                            metronome: preset ? { startBpm: preset.startBpm } : null,
-                            scaleKey: preset && preset.scaleId ? { scaleId: preset.scaleId } : null,
-                            notes: ""
-                        }])
-                        itemLabel.text = ""
+                    Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.foreground; opacity: 0.18 }
+
+                    PanelSectionHeader { text: "Build a Routine" }
+                    RowLayout {
+                        spacing: Style.spacing.md
+                        TextField { id: newRoutineName; Layout.fillWidth: true; placeholderText: "Routine name" }
                     }
-                }
-                Button {
-                    focusable: true
-                    text: "Save Routine"
-                    bordered: true
-                    foreground: Color.foreground
-                    accent: Color.accent
-                    enabled: newRoutineName.text.length > 0 && draftItems.items.length > 0
-                    onClicked: {
-                        if (root.service) root.service.createRoutine(newRoutineName.text, draftItems.items)
-                        newRoutineName.text = ""
-                        draftItems.items = []
+
+                    ColumnLayout {
+                        id: draftItems
+                        property var items: []
+                        spacing: Style.spacing.xs
+
+                        Repeater {
+                            model: draftItems.items
+                            delegate: RowLayout {
+                                required property var modelData
+                                required property int index
+                                Layout.fillWidth: true
+                                Text { Layout.fillWidth: true; text: (index + 1) + ". " + modelData.label + " (" + modelData.type + ")"; color: Color.foreground; font.family: Style.font.family; font.pixelSize: Style.font.body }
+                                Button { focusable: true; text: "↑"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = root.moveItem(draftItems.items, index, index - 1) }
+                                Button { focusable: true; text: "↓"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = root.moveItem(draftItems.items, index, index + 1) }
+                                Button { focusable: true; text: "Remove"; foreground: Color.foreground; accent: Color.accent; onClicked: draftItems.items = draftItems.items.filter(function (_, i) { return i !== index }) }
+                            }
+                        }
+                    }
+
+                    RowLayout {
+                        spacing: Style.spacing.md
+                        Dropdown {
+                            id: presetPicker
+                            label: "Preset"
+                            options: [{ value: "", label: "Custom" }].concat(Exercises.BUILTIN_EXERCISES.map(function (e) { return { value: e.id, label: e.name } }))
+                            value: ""
+                            onChanged: function (value) { presetPicker.value = value }
+                        }
+                        Dropdown {
+                            id: typePicker
+                            label: "Type"
+                            options: Routines.ITEM_TYPES.map(function (t) { return { value: t, label: t.replace(/_/g, " ") } })
+                            value: "custom"
+                            onChanged: function (value) { typePicker.value = value }
+                        }
+                        TextField { id: itemLabel; placeholderText: "Item label, e.g. Warmup" }
+                        NumberField { id: itemMinutes; label: "Minutes"; value: 5; from: 0; to: 120 }
+                        NumberField { id: itemTargetBpm; label: "Target BPM"; value: 0; from: 0; to: 300 }
+                    }
+                    RowLayout {
+                        Button {
+                            focusable: true
+                            text: "Add Item"
+                            bordered: true
+                            foreground: Color.foreground
+                            accent: Color.accent
+                            onClicked: {
+                                var preset = presetPicker.value ? Exercises.builtinExerciseById(presetPicker.value) : null
+                                draftItems.items = draftItems.items.concat([{
+                                    type: preset ? preset.type : typePicker.value,
+                                    label: itemLabel.text || (preset ? preset.name : "Practice item"),
+                                    durationMinutes: itemMinutes.value || null,
+                                    targetBpm: itemTargetBpm.value || (preset ? preset.targetBpm : null),
+                                    metronome: preset ? { startBpm: preset.startBpm } : null,
+                                    scaleKey: preset && preset.scaleId ? { key: root.service ? root.service.referenceKey : "C", scaleId: preset.scaleId } : null,
+                                    notes: ""
+                                }])
+                                itemLabel.text = ""
+                            }
+                        }
+                        Button {
+                            focusable: true
+                            text: "Save Routine"
+                            bordered: true
+                            foreground: Color.foreground
+                            accent: Color.accent
+                            enabled: newRoutineName.text.length > 0 && draftItems.items.length > 0
+                            onClicked: {
+                                if (root.service) root.service.createRoutine(newRoutineName.text, draftItems.items)
+                                newRoutineName.text = ""
+                                draftItems.items = []
+                            }
+                        }
                     }
                 }
             }

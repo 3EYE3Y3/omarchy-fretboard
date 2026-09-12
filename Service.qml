@@ -665,6 +665,24 @@ Item {
         resetPracticeTimer()
         activeRoutine = null
         activeRun = null
+        routineAwaitingOutcome = false
+    }
+
+    // A tempo-tracked item (one with a targetBpm) asks Clean/Nearly/Needs
+    // Work before moving on, reusing the same outcome -> next-BPM
+    // suggestion model as a standalone exercise; anything else (a warmup
+    // with no BPM target, a rhythm feel drill, ...) just advances.
+    function requestAdvanceRoutine() {
+        var item = activeItem()
+        if (item && item.targetBpm) routineAwaitingOutcome = true
+        else advanceRoutine()
+    }
+
+    function completeRoutineItem(outcome) {
+        var item = activeItem()
+        if (item && item.targetBpm) recordExerciseOutcome(item.id, metronomeBpm, outcome)
+        routineAwaitingOutcome = false
+        advanceRoutine()
     }
 
     // ------------------------------------------------------------ exercises / progress

@@ -126,74 +126,12 @@ Item {
                 font.pixelSize: Style.font.caption
             }
 
-            Flickable {
-                id: fretFlick
+            FretboardGrid {
                 Layout.fillWidth: true
-                Layout.preferredHeight: fretGrid.height + Style.space(10)
-                contentWidth: fretGrid.width
-                contentHeight: height
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-
-                Column {
-                    id: fretGrid
-                    y: Style.space(5)
-                    readonly property int cellSize: Style.space(34)
-                    readonly property var board: root.highlightedBoard()
-                    readonly property int stringCount: board ? board.strings.length : 0
-
-                    Repeater {
-                        model: fretGrid.stringCount
-                        delegate: Row {
-                            required property int index
-                            readonly property int stringIndex: fretGrid.stringCount - 1 - index // highest string on top
-                            readonly property var cells: fretGrid.board ? fretGrid.board.strings[stringIndex] : []
-
-                            Repeater {
-                                model: parent.cells
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    required property int index
-                                    width: fretGrid.cellSize
-                                    height: fretGrid.cellSize
-                                    color: "transparent"
-                                    border.width: 1
-                                    border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.18)
-
-                                    Rectangle {
-                                        visible: [3, 5, 7, 9, 12, 15, 17, 19, 21, 24].indexOf(modelData.fret) >= 0 && parent.index === 0
-                                        anchors.centerIn: parent
-                                        width: Style.space(4)
-                                        height: Style.space(4)
-                                        radius: width / 2
-                                        color: Color.foreground
-                                        opacity: 0.15
-                                    }
-
-                                    Rectangle {
-                                        visible: modelData.highlighted
-                                        anchors.centerIn: parent
-                                        width: fretGrid.cellSize * 0.72
-                                        height: width
-                                        radius: width / 2
-                                        color: modelData.isRoot ? Color.accent : Color.foreground
-                                        opacity: modelData.isRoot ? 1 : 0.55
-                                    }
-
-                                    Text {
-                                        visible: modelData.highlighted
-                                        anchors.centerIn: parent
-                                        text: root.service && root.service.showIntervals ? root.intervalFor(modelData.pitchClass) : modelData.name
-                                        color: modelData.isRoot ? Color.background : Color.background
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                        font.bold: true
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                board: root.highlightedBoard()
+                stringLabels: root.stringLabels()
+                showIntervals: root.service ? root.service.showIntervals : false
+                toneData: root.currentTones()
             }
 
             ColumnLayout {
@@ -229,69 +167,10 @@ Item {
         return service ? service.currentFretboard() : null
     }
 
-    function intervalFor(pitchClass) {
-        var tones = currentTones()
-        if (!tones) return ""
-        for (var i = 0; i < tones.notes.length; i++) if (tones.notes[i].pitchClass === pitchClass) return tones.notes[i].interval
-        return ""
-    }
-
-    component ChordDiagram: ColumnLayout {
-        property var voicing: null
-        spacing: Style.spacing.xxs
-        readonly property int stringCount: voicing ? voicing.strings.length : 6
-        readonly property int span: voicing ? Math.max(1, voicing.span) : 4
-
-        Text {
-            Layout.alignment: Qt.AlignHCenter
-            text: voicing && voicing.anchorFret > 0 ? (voicing.anchorFret + 1) + "fr" : ""
-            visible: voicing ? voicing.anchorFret > 0 : false
-            color: Color.foreground
-            opacity: 0.6
-            font.family: Style.font.family
-            font.pixelSize: Style.font.caption
-        }
-
-        Row {
-            Layout.alignment: Qt.AlignHCenter
-            spacing: Style.space(10)
-            Repeater {
-                model: voicing ? voicing.strings.length : 0
-                delegate: Column {
-                    required property int index
-                    readonly property var stringData: voicing.strings[voicing.strings.length - 1 - index]
-                    spacing: Style.space(2)
-
-                    Text {
-                        text: stringData.muted ? "x" : (stringData.fret === 0 ? "o" : "")
-                        color: Color.foreground
-                        font.family: Style.font.family
-                        font.pixelSize: Style.font.caption
-                        horizontalAlignment: Text.AlignHCenter
-                        width: Style.space(16)
-                    }
-                    Repeater {
-                        model: span + 1
-                        delegate: Rectangle {
-                            required property int index
-                            width: Style.space(16)
-                            height: Style.space(16)
-                            color: "transparent"
-                            border.width: 1
-                            border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.3)
-                            Rectangle {
-                                visible: !stringData.muted && (stringData.fret - voicing.anchorFret) === index && stringData.fret > 0
-                                anchors.centerIn: parent
-                                width: Style.space(10)
-                                height: width
-                                radius: width / 2
-                                color: Color.accent
-                            }
-                        }
-                    }
-                }
-            }
-        }
+    function stringLabels() {
+        var tuning = root.service ? root.service.currentTuning() : null
+        if (!tuning) return []
+        return tuning.notes.map(function (n) { return n.replace(/[0-9-]/g, "") })
     }
 
     // ------------------------------------------------------------ circle of fifths
