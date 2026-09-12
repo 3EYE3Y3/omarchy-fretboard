@@ -40,7 +40,8 @@ Flickable {
         spacing: 0
 
         Row {
-            visible: root.stringLabels.length > 0
+            width: (root.lastFret - root.startFret + 1) * root.cellSize + root.cellSize * 0.6
+            height: root.cellSize * 0.6
             spacing: 0
             Item { width: root.cellSize * 0.6; height: root.cellSize * 0.6 }
             Repeater {
@@ -66,6 +67,7 @@ Flickable {
                 required property int index
                 readonly property int stringIndex: root.stringCount - 1 - index // highest string on top
                 readonly property var cells: root.board ? root.board.strings[stringIndex].slice(root.startFret, root.lastFret + 1) : []
+                height: root.cellSize
                 spacing: 0
 
                 Text {

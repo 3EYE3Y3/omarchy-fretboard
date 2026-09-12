@@ -90,5 +90,7 @@ BarWidget {
         function toggle(): void { root.toggle() }
         function startMetronome(): void { if (root.fretboardService) root.fretboardService.startMetronome() }
         function stopMetronome(): void { if (root.fretboardService) root.fretboardService.stopMetronome() }
+        function startPreset(id: string): void { if (root.fretboardService) root.fretboardService.startPreset(id) }
+        function startRoutine(id: string): void { if (root.fretboardService) root.fretboardService.startRoutine(id) }
     }
 }

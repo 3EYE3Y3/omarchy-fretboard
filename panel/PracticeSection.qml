@@ -259,7 +259,7 @@ Item {
                 }
                 Text {
                     text: (root.service && root.service.tempoTrainerFinished) ? "Target reached!" :
-                        "Target " + (root.service ? root.service.tempoTrainerPlan.targetBpm : "") + " BPM"
+                        "Target " + (root.service && root.service.tempoTrainerPlan ? root.service.tempoTrainerPlan.targetBpm : "") + " BPM"
                     color: Color.foreground
                     opacity: 0.7
                     font.family: Style.font.family
