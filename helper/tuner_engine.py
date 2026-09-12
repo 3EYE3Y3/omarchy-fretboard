@@ -20,6 +20,7 @@ import subprocess
 import sys
 
 import pitch_yin
+import tuner_stability
 
 SAMPLE_RATE = 48000
 WINDOW_SAMPLES = 4096   # ~85ms at 48kHz - enough for low guitar/bass notes
@@ -50,6 +51,8 @@ def main():
     parser.add_argument("--target", type=str, default=None, help="PipeWire node id/name to capture from")
     parser.add_argument("--fmin", type=float, default=27.0)
     parser.add_argument("--fmax", type=float, default=1400.0)
+    parser.add_argument("--sensitivity", type=str, default=tuner_stability.DEFAULT_SENSITIVITY,
+                         choices=list(tuner_stability.SENSITIVITY_PRESETS.keys()))
     args = parser.parse_args()
 
     if shutil.which("pw-record") is None:
@@ -81,7 +84,10 @@ def main():
     signal.signal(signal.SIGTERM, handle_signal)
     signal.signal(signal.SIGINT, handle_signal)
 
-    log({"type": "ready", "sampleRate": args.rate, "target": args.target})
+    log({"type": "ready", "sampleRate": args.rate, "target": args.target, "sensitivity": args.sensitivity})
+
+    threshold = tuner_stability.yin_threshold_for(args.sensitivity)
+    stabilizer = tuner_stability.NoteStabilizer(args.sensitivity)
 
     window = []
     try:
@@ -97,12 +103,16 @@ def main():
             if len(window) < WINDOW_SAMPLES:
                 continue
 
-            result = pitch_yin.estimate_pitch(window, args.rate, fmin=args.fmin, fmax=args.fmax)
-            if result is None:
+            raw_result = pitch_yin.estimate_pitch(window, args.rate, fmin=args.fmin, fmax=args.fmax, threshold=threshold)
+            stable_frequency = stabilizer.process(raw_result)
+            if stable_frequency is None:
                 log({"type": "reading", "frequency": None})
             else:
-                frequency, clarity, rms = result
-                log({"type": "reading", "frequency": frequency, "clarity": clarity, "rms": rms})
+                # clarity/rms are diagnostic only - the frequency is what
+                # the UI trusts, already gated/smoothed by the stabilizer.
+                clarity = raw_result[1] if raw_result is not None else None
+                rms = raw_result[2] if raw_result is not None else None
+                log({"type": "reading", "frequency": stable_frequency, "clarity": clarity, "rms": rms})
     finally:
         handle_signal(None, None)
 

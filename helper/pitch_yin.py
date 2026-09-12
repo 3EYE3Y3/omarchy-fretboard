@@ -20,7 +20,10 @@ except ImportError:  # pragma: no cover - exercised only where NumPy is absent
     _np = None
 
 DEFAULT_THRESHOLD = 0.15
-MIN_RMS = 0.003  # below this the input is treated as silence, not a note
+# A cheap early-exit only (skip YIN entirely on true digital silence) - the
+# real, sensitivity-dependent noise-floor decision is NoteStabilizer's job
+# (helper/tuner_stability.py), not this module's.
+MIN_RMS = 0.0006
 
 
 def _rms(samples):
