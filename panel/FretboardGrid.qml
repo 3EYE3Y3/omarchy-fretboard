@@ -34,6 +34,12 @@ Flickable {
         return ""
     }
 
+    function nameFor(pitchClass, fallback) {
+        if (!toneData) return fallback
+        for (var i = 0; i < toneData.notes.length; i++) if (toneData.notes[i].pitchClass === pitchClass) return toneData.notes[i].name
+        return fallback
+    }
+
     Column {
         id: grid
         y: Style.space(5)
@@ -118,7 +124,7 @@ Flickable {
                         Text {
                             visible: modelData.highlighted
                             anchors.centerIn: parent
-                            text: root.showIntervals ? root.intervalFor(modelData.pitchClass) : modelData.name
+                            text: root.showIntervals ? root.intervalFor(modelData.pitchClass) : root.nameFor(modelData.pitchClass, modelData.name)
                             color: Color.background
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption

@@ -3,8 +3,8 @@
 ## Automated
 
 ```bash
-npm test                                        # 98 tests, node:test + node:assert/strict
-python3 -m unittest discover -s helper/tests    # 29 tests, stdlib unittest
+npm test                                        # 122 tests, node:test + node:assert/strict
+python3 -m unittest discover -s helper/tests    # 30 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
 
@@ -18,14 +18,15 @@ reimplementation drift between "the logic" and "the tested logic."
 | Tempo trainer | `js/tempo_trainer.js` / `tests/tempo_trainer.test.mjs` | BPM at elapsed time/bars, ascending and descending plans, completion, the spec's 80→120 @ +5/2min example |
 | Pitch/note math | `js/pitch.js` / `tests/pitch.test.mjs` | Frequency→note/octave/cents, adjustable A4, in-tune tolerance, round-trip note→frequency |
 | Tunings | `js/tunings.js` / `tests/tunings.test.mjs` | All 8 built-in tunings, validation, custom-tuning creation/resolution |
-| Scales & chords | `js/theory.js` / `tests/theory.test.mjs` | All 12 scales and 11 chord families construct the correct notes/formula in multiple keys |
+| Scales & chords | `js/theory.js` / `tests/theory.test.mjs` | All 14 scale/mode entries and 11 chord families; canonical formulas, intervals, representative spellings and all-root transposition |
 | Fretboard | `js/fretboard.js` / `tests/fretboard.test.mjs` | Note-at-fret math, 24+ fret board construction, scale/chord highlighting and root marking, generic "one position" fret-window search |
-| Chord voicings | `js/chord_voicings.js` / `tests/chord_voicings.test.mjs` | Reproduces the textbook open-E-major shape exactly; invariant checks (root present, only chord tones, playable span) across 7 chords/tunings |
+| Chord voicings | `js/chord_voicings.js` / `tests/chord_voicings.test.mjs` | Exact common open/barre/7/sus/power fixtures; required-tone, no-extra-tone and span checks for all 11 families in all 12 roots; deliberate suppression in non-Standard tunings |
 | Circle of fifths | `js/circle_of_fifths.js` / `tests/circle_of_fifths.test.mjs` | Key order, relative major/minor pairing, sharps/flats, wraparound neighbors |
 | Routines | `js/routines.js` / `tests/routines.test.mjs` | Create/add/update/remove/reorder/duplicate, and the full start→advance→complete run state machine |
 | Progression suggestions | `js/progress.js` / `tests/progress.test.mjs` | Clean/Nearly/Needs Work → next-BPM suggestion (matches the spec's 100→102-105 example), practice-minute/streak/session stats |
 | Persistence & migration | `js/storage.js` / `tests/storage.test.mjs` | Empty/missing file, well-formed round-trip, invalid JSON, malformed-entry recovery, missing-key backfill, schema-version migration flag, preference clamping, tuner-sensitivity default-fill/rejection |
 | Practice-session presets | `js/presets.js` / `tests/presets.test.mjs` | All 7 categories present, curated size (not empty, not hundreds), unique/stable/namespaced ids, every scale/chord reference is a real id + valid note name, item shape matches `routines.js`'s `createItem` exactly (drift guard), a diatonic-triad-style progression produces one item per chord in order, duplicating a preset clears the `preset` flag and never mutates the source (JSON diff before/after), duplicating a multi-item chord progression preserves every chord |
+| Independent canonical music fixtures | `tests/canonical_music.test.mjs` | Exact A-minor-pentatonic Boxes 1–5 and root coordinates, E-minor Box 1/transposition, C/G/A scales, all formulas in all roots, E-major 3NPS, triad inversions, exact conventional chord shapes, tuning restrictions, and every positional preset coordinate |
 | Manifest | `manifest.json` / `tests/manifest.test.mjs` | Schema version, non-reserved id, every kind has a matching, existing entry point |
 | Click-schedule math (Python) | `helper/click_schedule.py` / `helper/tests/test_click_schedule.py` | Same tick/beat/accent math as `js/metronome.js`, verified independently on the audio engine's own side |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
@@ -37,7 +38,12 @@ known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
 
-## Manual smoke test (v0.3.1)
+## Manual visual/content audit (v0.3.2)
+
+See `docs/MUSIC_CONTENT_AUDIT.md` for the independent source list, all-40-preset
+review matrix and representative live-render checklist/results.
+
+## Earlier manual smoke test (v0.3.1)
 
 Performed against a live Omarchy 4.0.3 session with real audio hardware; see the
 final report for exact commands. All of the following were directly observed via

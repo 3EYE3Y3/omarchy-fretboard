@@ -6,7 +6,7 @@ const Theory = loadQmlJs(new URL("../js/theory.js", import.meta.url))
 
 const REQUIRED_SCALES = [
   "major", "natural_minor", "major_pentatonic", "minor_pentatonic", "blues",
-  "harmonic_minor", "melodic_minor", "dorian", "phrygian", "lydian", "mixolydian", "locrian"
+  "harmonic_minor", "melodic_minor", "ionian", "dorian", "phrygian", "lydian", "mixolydian", "aeolian", "locrian"
 ]
 
 const REQUIRED_CHORDS = [
@@ -41,7 +41,7 @@ test("builds an A minor pentatonic scale", () => {
 test("transposes scales correctly for a sharp key", () => {
   const scale = Theory.buildScale("F#", "major")
   const names = Array.from(scale.notes).map((n) => n.name)
-  assert.deepEqual(names, ["F#", "G#", "A#", "B", "C#", "D#", "F"])
+  assert.deepEqual(names, ["F#", "G#", "A#", "B", "C#", "D#", "E#"])
 })
 
 test("builds a G major chord with correct tones and formula", () => {
@@ -63,6 +63,14 @@ test("builds a power chord with only root and fifth", () => {
   const chord = Theory.buildChord("E", "power")
   const names = Array.from(chord.notes).map((n) => n.name)
   assert.deepEqual(names, ["E", "B"])
+})
+
+test("interval labels preserve musical function rather than collapsing enharmonics", () => {
+  const lydian = Theory.buildScale("C", "lydian")
+  assert.equal(lydian.notes[3].name, "F#")
+  assert.equal(lydian.notes[3].interval, "#4")
+  assert.equal(Theory.buildChord("C", "augmented").notes[2].interval, "#5")
+  assert.equal(Theory.buildChord("C", "add9").notes[3].interval, "9")
 })
 
 test("returns null for unknown root or scale/chord id", () => {

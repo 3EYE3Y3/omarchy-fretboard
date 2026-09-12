@@ -5,9 +5,15 @@ import { fileURLToPath } from "node:url"
 
 const manifestPath = fileURLToPath(new URL("../manifest.json", import.meta.url))
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"))
+const packageJson = JSON.parse(fs.readFileSync(fileURLToPath(new URL("../package.json", import.meta.url)), "utf8"))
 
 test("manifest declares schema version 1", () => {
   assert.equal(manifest.schemaVersion, 1)
+})
+
+test("release metadata agrees on v0.3.2", () => {
+  assert.equal(manifest.version, "0.3.2")
+  assert.equal(packageJson.version, manifest.version)
 })
 
 test("manifest id avoids the reserved omarchy.* namespace", () => {

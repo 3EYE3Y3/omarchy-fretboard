@@ -8,7 +8,9 @@ import "../js/routines.js" as Routines
 import "../js/exercises.js" as Exercises
 import "../js/theory.js" as Theory
 import "../js/fretboard.js" as Fretboard
+import "../js/visual_shapes.js" as VisualShapes
 import "../js/chord_voicings.js" as Voicings
+import "../js/tunings.js" as Tunings
 
 Item {
     id: root
@@ -369,25 +371,56 @@ Item {
         if (!root.service) return null
         var tones = previewToneData(item)
         if (!tones) return null
-        var tuning = root.service.currentTuning()
+        var tuning = root.previewTuning(item)
         var board = Fretboard.buildFretboard(tuning.notes, root.service.fretCount)
+        if (item.visualAid && item.visualAid.mode !== VisualShapes.FULL_FRETBOARD_SCALE)
+            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, tones.rootPitchClass), tones.rootPitchClass)
         return Fretboard.highlightFretboard(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass)
     }
 
     function previewVoicings(item) {
         if (!root.service || !item || !item.chordKey) return []
-        var tuning = root.service.currentTuning()
+        var tuning = root.previewTuning(item)
         var chord = Theory.buildChord(item.chordKey.key, item.chordKey.chordId)
         if (!chord) return []
-        return Voicings.findVoicings(tuning.notes, Theory.pitchClassSet(chord.notes), chord.rootPitchClass)
+        var toneSet = Theory.pitchClassSet(chord.notes)
+        if (item.visualAid && item.visualAid.frets) {
+            var exact = Voicings.voicingFromFrets(tuning.notes, item.visualAid.frets, toneSet, chord.rootPitchClass, item.label, "as diagrammed")
+            return exact ? [exact] : []
+        }
+        return Voicings.findVoicings(tuning.notes, toneSet, chord.rootPitchClass, chord.chordId)
     }
 
     function previewFretWindow(item) {
         if (!root.service || !item) return null
+        if (item.visualAid) {
+            var tonesForAid = previewToneData(item)
+            var visualWindow = VisualShapes.fretWindow(item.visualAid, tonesForAid ? tonesForAid.rootPitchClass : 0)
+            if (visualWindow) return visualWindow
+            if (item.visualAid.mode === VisualShapes.FULL_FRETBOARD_SCALE || item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
+        }
         if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
         var tones = previewToneData(item)
         if (!tones) return null
-        return Fretboard.findPositionWindow(root.service.currentTuning().notes, Theory.pitchClassSet(tones.notes), root.service.fretCount, 5)
+        return Fretboard.findPositionWindow(root.previewTuning(item).notes, Theory.pitchClassSet(tones.notes), root.service.fretCount, 5)
+    }
+
+    function previewTuning(item) {
+        if (!root.service) return null
+        return item && item.tuningId ? Tunings.resolveTuning(item.tuningId, root.service.customTunings) : root.service.currentTuning()
+    }
+
+    function previewShowsFretboard(item) {
+        return !!previewToneData(item) && (!item.visualAid || item.visualAid.mode !== VisualShapes.CHORD_SHAPE)
+    }
+
+    function previewShowsChordDiagram(item) {
+        return !!item.chordKey && !!item.visualAid && item.visualAid.mode === VisualShapes.CHORD_SHAPE
+    }
+
+    function previewStringLabels(item) {
+        var tuning = previewTuning(item)
+        return tuning ? tuning.notes.map(function (n) { return n.replace(/[0-9-]/g, "") }) : []
     }
 
     function stringLabelsFor(service) {
@@ -464,9 +497,9 @@ Item {
 
                 // Visual aid: whatever the current item is actually about.
                 FretboardGrid {
-                    visible: root.service ? !!root.service.currentToneData() : false
+                    visible: root.service ? root.service.activeItemShowsFretboard() : false
                     Layout.fillWidth: true
-                    board: root.service ? root.service.currentFretboard() : null
+                    board: root.service ? root.service.activeVisualBoard() : null
                     stringLabels: root.stringLabelsFor(root.service)
                     showIntervals: root.service ? root.service.showIntervals : false
                     toneData: root.service ? root.service.currentToneData() : null
@@ -474,10 +507,10 @@ Item {
                     endFret: root.service && root.service.activeItemFretWindow() ? root.service.activeItemFretWindow().endFret : -1
                 }
                 RowLayout {
-                    visible: root.service ? root.service.referenceMode === "chord" : false
+                    visible: root.service ? root.service.activeItemChordVoicings().length > 0 : false
                     spacing: Style.spacing.lg
                     Repeater {
-                        model: root.service ? root.service.currentChordVoicings() : []
+                        model: root.service ? root.service.activeItemChordVoicings() : []
                         delegate: ChordDiagram {
                             required property var modelData
                             voicing: modelData
@@ -683,17 +716,17 @@ Item {
                                     }
 
                                     FretboardGrid {
-                                        visible: !!root.previewToneData(modelData.items[0])
+                                        visible: root.previewShowsFretboard(modelData.items[0])
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: Style.space(160)
                                         board: root.previewBoard(modelData.items[0])
-                                        stringLabels: root.stringLabelsFor(root.service)
+                                        stringLabels: root.previewStringLabels(modelData.items[0])
                                         toneData: root.previewToneData(modelData.items[0])
                                         startFret: root.previewFretWindow(modelData.items[0]) ? root.previewFretWindow(modelData.items[0]).startFret : 0
                                         endFret: root.previewFretWindow(modelData.items[0]) ? root.previewFretWindow(modelData.items[0]).endFret : -1
                                     }
                                     RowLayout {
-                                        visible: !!modelData.items[0].chordKey
+                                        visible: root.previewShowsChordDiagram(modelData.items[0])
                                         spacing: Style.spacing.lg
                                         Repeater {
                                             model: root.previewVoicings(modelData.items[0])

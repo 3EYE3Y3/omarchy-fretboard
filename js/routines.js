@@ -25,6 +25,9 @@ function createItem(overrides) {
         scaleKey: o.scaleKey || null,
         // A chord/progression item: { key, chordId }, same shape as scaleKey.
         chordKey: o.chordKey || null,
+        // Exact visual semantics. A scale pitch set is not a guitar shape.
+        tuningId: o.tuningId || null,
+        visualAid: o.visualAid ? JSON.parse(JSON.stringify(o.visualAid)) : null,
         // Optional [startFret, endFret] window the visual aid should default
         // to for this item, instead of computing one automatically.
         fretWindow: Array.isArray(o.fretWindow) && o.fretWindow.length === 2 ? o.fretWindow.slice() : null,

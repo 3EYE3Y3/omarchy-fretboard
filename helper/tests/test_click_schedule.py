@@ -51,6 +51,11 @@ class TickInfoTests(unittest.TestCase):
         beat_index, sub_index, accent = cs.tick_info(4, "4-4", "quarter")
         self.assertEqual((beat_index, sub_index, accent), (0, 0, True))
 
+    def test_six_eight_has_two_compound_beats_of_three_eighths(self):
+        results = [cs.tick_info(i, "6-8", "triplet") for i in range(12)]
+        self.assertEqual([r[0] for r in results], [0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1])
+        self.assertEqual([r[2] for r in results], [True, False, False, False, False, False, True, False, False, False, False, False])
+
 
 if __name__ == "__main__":
     unittest.main()

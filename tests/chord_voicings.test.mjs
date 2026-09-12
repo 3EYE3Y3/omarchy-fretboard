@@ -23,8 +23,9 @@ test("reproduces the textbook open E major chord shape", () => {
 
 test("every returned voicing sounds the chord root and only chord tones", () => {
   const cases = [
-    ["A", "minor"], ["C", "major"], ["G", "dominant7"], ["D", "sus4"],
-    ["B", "diminished"], ["F", "major7"], ["E", "power"]
+    ["A", "minor"], ["C", "major"], ["G", "dominant7"], ["F", "major7"],
+    ["D", "minor7"], ["A", "sus2"], ["D", "sus4"], ["B", "diminished"],
+    ["C", "augmented"], ["E", "add9"], ["E", "power"]
   ]
   for (const [root, chordId] of cases) {
     const chord = Theory.buildChord(root, chordId)

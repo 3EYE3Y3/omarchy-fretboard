@@ -2,6 +2,38 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.2] - 2026-09-12
+
+Correctness audit release. Marketplace preparation remains paused pending personal
+review.
+
+### Fixed
+- Replaced the density-selected fret window mislabeled as Minor Pentatonic Box 1 with
+  independently verified exact string/fret data, and added canonical transposable
+  fixtures for all five A-minor-pentatonic boxes plus E-minor Box 1.
+- Separated pitch-class membership from guitar-shape claims through explicit visual
+  modes for full fretboards, positions, pentatonic boxes, 3NPS shapes, triads, chord
+  shapes and patterns. Built-in positional labels now render exact coordinates.
+- Replaced greedy chord-tone placement with curated, validated Standard-tuning open,
+  E-root and A-root shapes. Diagrams require every chord tone, exclude non-chord
+  tones, enforce a playable span and are not shown under incompatible tunings.
+- Corrected compound-meter modeling: 6/8 now has two dotted-quarter beats with three
+  written eighth-note ticks per beat; 9/8 and 12/8 use three and four compound beats.
+  Global subdivision labels now state clicks per beat so they remain truthful in
+  simple, odd and compound meters.
+- Corrected scale/mode formulas and enharmonic spelling, added explicit Ionian and
+  Aeolian entries, and exposed formulas in the Reference view.
+- Audited and corrected the title, instructions, visual, picking/rhythm data and
+  metronome behavior of every one of the 40 built-in practice presets. Progression
+  items are now accurately called timed shape studies/cycles.
+- Corrected chord-diagram fret labels and made the circle's F#/Gb and Db/C# seam
+  explicit.
+
+### Added
+- Independent canonical music fixtures and the source-backed audit report at
+  `docs/MUSIC_CONTENT_AUDIT.md`, including an explicit PASS/FAIL matrix for all 40
+  presets and representative manual visual comparisons.
+
 ## [0.3.1] - 2026-09-12
 
 A focused polish/update release driven by user acceptance feedback on v0.3.0. No

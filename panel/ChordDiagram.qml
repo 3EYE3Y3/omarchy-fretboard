@@ -10,7 +10,7 @@ import qs.Commons
 ColumnLayout {
     id: root
     property var voicing: null
-    property string label: ""
+    property string label: voicing && voicing.label ? voicing.label : ""
 
     spacing: Style.spacing.xxs
     readonly property int span: voicing ? Math.max(1, voicing.span) : 4
@@ -27,7 +27,7 @@ ColumnLayout {
 
     Text {
         Layout.alignment: Qt.AlignHCenter
-        text: root.voicing && root.voicing.anchorFret > 0 ? (root.voicing.anchorFret + 1) + "fr" : ""
+        text: root.voicing && root.voicing.anchorFret > 0 ? root.voicing.anchorFret + "fr" : ""
         visible: root.voicing ? root.voicing.anchorFret > 0 : false
         color: Color.foreground
         opacity: 0.6

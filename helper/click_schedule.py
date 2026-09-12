@@ -9,7 +9,7 @@ audio process.
 
 TIME_SIGNATURES = {
     "2-4": 2, "3-4": 3, "4-4": 4, "5-4": 5,
-    "6-8": 6, "7-8": 7, "9-8": 9, "12-8": 12,
+    "6-8": 2, "7-8": 7, "9-8": 3, "12-8": 4,
 }
 
 SUBDIVISIONS = {
@@ -40,9 +40,9 @@ def ticks_per_beat(subdivision_id):
 
 
 def samples_per_tick(bpm, subdivision_id, sample_rate):
-    """One "beat" is one count of the time signature's numerator, so a tick
-    duration is (60 / bpm) seconds divided by the subdivision's ticks per
-    beat, independent of which time signature is selected."""
+    """A beat is a quarter note in simple /4 meters and a dotted quarter in
+    compound 6/8, 9/8 and 12/8. Subdivision three gives the written eighths
+    of compound meter."""
     beat_seconds = 60.0 / clamp_bpm(bpm)
     tick_seconds = beat_seconds / ticks_per_beat(subdivision_id)
     return max(1, round(tick_seconds * sample_rate))

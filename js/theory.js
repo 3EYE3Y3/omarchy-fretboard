@@ -3,38 +3,43 @@
 var SHARP_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 var FLAT_NAMES = ["C", "Db", "D", "Eb", "E", "F", "Gb", "G", "Ab", "A", "Bb", "B"]
 
-// Generic interval label per semitone distance from the root. Good enough
-// for a practice reference; it does not attempt full enharmonic spelling
-// (e.g. a diminished 5th vs. an augmented 4th are both "b5" here).
+// Generic fallback only. Built-in scales/chords use their formula tokens so
+// enharmonically distinct functions (#4 vs b5, #5 vs b6, 9 vs 2) display
+// correctly even when they share a pitch class.
 var INTERVAL_LABELS = ["R", "b2", "2", "b3", "3", "4", "b5", "5", "b6", "6", "b7", "7"]
 
+// `degrees` preserves diatonic letter spelling. It is deliberately separate
+// from pitch-class membership: a C# major scale must spell E# and B#, while a
+// fretboard cell may still use the enharmonic pitch classes F and C.
 var SCALES = [
-    { id: "major", name: "Major", intervals: [0, 2, 4, 5, 7, 9, 11] },
-    { id: "natural_minor", name: "Natural Minor", intervals: [0, 2, 3, 5, 7, 8, 10] },
-    { id: "major_pentatonic", name: "Major Pentatonic", intervals: [0, 2, 4, 7, 9] },
-    { id: "minor_pentatonic", name: "Minor Pentatonic", intervals: [0, 3, 5, 7, 10] },
-    { id: "blues", name: "Blues", intervals: [0, 3, 5, 6, 7, 10] },
-    { id: "harmonic_minor", name: "Harmonic Minor", intervals: [0, 2, 3, 5, 7, 8, 11] },
-    { id: "melodic_minor", name: "Melodic Minor", intervals: [0, 2, 3, 5, 7, 9, 11] },
-    { id: "dorian", name: "Dorian", intervals: [0, 2, 3, 5, 7, 9, 10] },
-    { id: "phrygian", name: "Phrygian", intervals: [0, 1, 3, 5, 7, 8, 10] },
-    { id: "lydian", name: "Lydian", intervals: [0, 2, 4, 6, 7, 9, 11] },
-    { id: "mixolydian", name: "Mixolydian", intervals: [0, 2, 4, 5, 7, 9, 10] },
-    { id: "locrian", name: "Locrian", intervals: [0, 1, 3, 5, 6, 8, 10] }
+    { id: "major", name: "Major", formula: "1 2 3 4 5 6 7", intervals: [0, 2, 4, 5, 7, 9, 11], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "natural_minor", name: "Natural Minor", formula: "1 2 b3 4 5 b6 b7", intervals: [0, 2, 3, 5, 7, 8, 10], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "major_pentatonic", name: "Major Pentatonic", formula: "1 2 3 5 6", intervals: [0, 2, 4, 7, 9], degrees: [0, 1, 2, 4, 5] },
+    { id: "minor_pentatonic", name: "Minor Pentatonic", formula: "1 b3 4 5 b7", intervals: [0, 3, 5, 7, 10], degrees: [0, 2, 3, 4, 6] },
+    { id: "blues", name: "Blues", formula: "1 b3 4 b5 5 b7", intervals: [0, 3, 5, 6, 7, 10], degrees: [0, 2, 3, 4, 4, 6] },
+    { id: "harmonic_minor", name: "Harmonic Minor", formula: "1 2 b3 4 5 b6 7", intervals: [0, 2, 3, 5, 7, 8, 11], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "melodic_minor", name: "Melodic Minor (ascending)", formula: "1 2 b3 4 5 6 7", intervals: [0, 2, 3, 5, 7, 9, 11], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "ionian", name: "Ionian", formula: "1 2 3 4 5 6 7", intervals: [0, 2, 4, 5, 7, 9, 11], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "dorian", name: "Dorian", formula: "1 2 b3 4 5 6 b7", intervals: [0, 2, 3, 5, 7, 9, 10], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "phrygian", name: "Phrygian", formula: "1 b2 b3 4 5 b6 b7", intervals: [0, 1, 3, 5, 7, 8, 10], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "lydian", name: "Lydian", formula: "1 2 3 #4 5 6 7", intervals: [0, 2, 4, 6, 7, 9, 11], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "mixolydian", name: "Mixolydian", formula: "1 2 3 4 5 6 b7", intervals: [0, 2, 4, 5, 7, 9, 10], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "aeolian", name: "Aeolian", formula: "1 2 b3 4 5 b6 b7", intervals: [0, 2, 3, 5, 7, 8, 10], degrees: [0, 1, 2, 3, 4, 5, 6] },
+    { id: "locrian", name: "Locrian", formula: "1 b2 b3 4 b5 b6 b7", intervals: [0, 1, 3, 5, 6, 8, 10], degrees: [0, 1, 2, 3, 4, 5, 6] }
 ]
 
 var CHORDS = [
-    { id: "major", name: "Major", symbol: "", intervals: [0, 4, 7], formula: "1 3 5" },
-    { id: "minor", name: "Minor", symbol: "m", intervals: [0, 3, 7], formula: "1 b3 5" },
-    { id: "dominant7", name: "Dominant 7", symbol: "7", intervals: [0, 4, 7, 10], formula: "1 3 5 b7" },
-    { id: "major7", name: "Major 7", symbol: "maj7", intervals: [0, 4, 7, 11], formula: "1 3 5 7" },
-    { id: "minor7", name: "Minor 7", symbol: "m7", intervals: [0, 3, 7, 10], formula: "1 b3 5 b7" },
-    { id: "sus2", name: "Sus2", symbol: "sus2", intervals: [0, 2, 7], formula: "1 2 5" },
-    { id: "sus4", name: "Sus4", symbol: "sus4", intervals: [0, 5, 7], formula: "1 4 5" },
-    { id: "diminished", name: "Diminished", symbol: "dim", intervals: [0, 3, 6], formula: "1 b3 b5" },
-    { id: "augmented", name: "Augmented", symbol: "aug", intervals: [0, 4, 8], formula: "1 3 #5" },
-    { id: "add9", name: "Add9", symbol: "add9", intervals: [0, 4, 7, 2], formula: "1 3 5 9" },
-    { id: "power", name: "Power Chord", symbol: "5", intervals: [0, 7], formula: "1 5" }
+    { id: "major", name: "Major", symbol: "", intervals: [0, 4, 7], degrees: [0, 2, 4], formula: "1 3 5" },
+    { id: "minor", name: "Minor", symbol: "m", intervals: [0, 3, 7], degrees: [0, 2, 4], formula: "1 b3 5" },
+    { id: "dominant7", name: "Dominant 7", symbol: "7", intervals: [0, 4, 7, 10], degrees: [0, 2, 4, 6], formula: "1 3 5 b7" },
+    { id: "major7", name: "Major 7", symbol: "maj7", intervals: [0, 4, 7, 11], degrees: [0, 2, 4, 6], formula: "1 3 5 7" },
+    { id: "minor7", name: "Minor 7", symbol: "m7", intervals: [0, 3, 7, 10], degrees: [0, 2, 4, 6], formula: "1 b3 5 b7" },
+    { id: "sus2", name: "Sus2", symbol: "sus2", intervals: [0, 2, 7], degrees: [0, 1, 4], formula: "1 2 5" },
+    { id: "sus4", name: "Sus4", symbol: "sus4", intervals: [0, 5, 7], degrees: [0, 3, 4], formula: "1 4 5" },
+    { id: "diminished", name: "Diminished", symbol: "dim", intervals: [0, 3, 6], degrees: [0, 2, 4], formula: "1 b3 b5" },
+    { id: "augmented", name: "Augmented", symbol: "aug", intervals: [0, 4, 8], degrees: [0, 2, 4], formula: "1 3 #5" },
+    { id: "add9", name: "Add9", symbol: "add9", intervals: [0, 4, 7, 2], degrees: [0, 2, 4, 1], formula: "1 3 5 9" },
+    { id: "power", name: "Power Chord", symbol: "5", intervals: [0, 7], degrees: [0, 4], formula: "1 5" }
 ]
 
 function finiteNumber(value, fallback) {
@@ -90,6 +95,40 @@ function toneList(rootName, intervals, preferFlats) {
     return notes
 }
 
+var LETTERS = ["C", "D", "E", "F", "G", "A", "B"]
+function spelledToneList(rootName, scale, preferFlats) {
+    var root = pitchClassIndex(rootName)
+    if (root < 0) return []
+    var rootLetter = LETTERS.indexOf(String(rootName || "")[0].toUpperCase())
+    if (rootLetter < 0 || !scale.degrees) return toneList(rootName, scale.intervals, preferFlats)
+    var notes = []
+    var formulaLabels = String(scale.formula || "").split(/\s+/)
+    for (var i = 0; i < scale.intervals.length; i++) {
+        var pitchClass = (root + scale.intervals[i]) % 12
+        var letter = LETTERS[(rootLetter + scale.degrees[i]) % 7]
+        var natural = pitchClassIndex(letter)
+        var delta = ((pitchClass - natural + 18) % 12) - 6
+        var accidental = ""
+        if (delta === 1) accidental = "#"
+        else if (delta === 2) accidental = "##"
+        else if (delta === -1) accidental = "b"
+        else if (delta === -2) accidental = "bb"
+        else if (delta !== 0) return toneList(rootName, scale.intervals, preferFlats)
+        notes.push({
+            pitchClass: pitchClass,
+            name: letter + accidental,
+            interval: i === 0 ? "R" : (formulaLabels[i] || INTERVAL_LABELS[scale.intervals[i] % 12]),
+            semitonesFromRoot: scale.intervals[i]
+        })
+    }
+    return notes
+}
+
+function normalizedSpelling(name) {
+    var text = String(name || "").trim()
+    return text.length ? text[0].toUpperCase() + text.slice(1) : ""
+}
+
 // Builds the notes of a scale in a given key. Returns null for an unknown
 // root/scale rather than throwing, so the UI can show "pick a key" instead
 // of crashing on an incomplete selection.
@@ -98,11 +137,12 @@ function buildScale(rootName, scaleId, preferFlats) {
     var root = pitchClassIndex(rootName)
     if (!scale || root < 0) return null
     return {
-        root: noteName(root, preferFlats),
+        root: normalizedSpelling(rootName),
         rootPitchClass: root,
         scaleId: scale.id,
         scaleName: scale.name,
-        notes: toneList(rootName, scale.intervals, preferFlats)
+        formula: scale.formula,
+        notes: spelledToneList(rootName, scale, preferFlats)
     }
 }
 
@@ -110,15 +150,16 @@ function buildChord(rootName, chordId, preferFlats) {
     var chord = chordById(chordId)
     var root = pitchClassIndex(rootName)
     if (!chord || root < 0) return null
+    var spelledRoot = normalizedSpelling(rootName)
     return {
-        root: noteName(root, preferFlats),
+        root: spelledRoot,
         rootPitchClass: root,
         chordId: chord.id,
         chordName: chord.name,
         symbol: chord.symbol,
         formula: chord.formula,
-        name: noteName(root, preferFlats) + chord.symbol,
-        notes: toneList(rootName, chord.intervals, preferFlats)
+        name: spelledRoot + chord.symbol,
+        notes: spelledToneList(rootName, chord, preferFlats)
     }
 }
 

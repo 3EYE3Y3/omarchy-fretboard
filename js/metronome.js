@@ -6,21 +6,24 @@ var TAP_RESET_MS = 2000
 var TAP_MAX_SAMPLES = 8
 
 var TIME_SIGNATURES = [
-    { id: "2-4", label: "2/4", beatsPerBar: 2, beatUnit: 4 },
-    { id: "3-4", label: "3/4", beatsPerBar: 3, beatUnit: 4 },
-    { id: "4-4", label: "4/4", beatsPerBar: 4, beatUnit: 4 },
-    { id: "5-4", label: "5/4", beatsPerBar: 5, beatUnit: 4 },
-    { id: "6-8", label: "6/8", beatsPerBar: 6, beatUnit: 8 },
-    { id: "7-8", label: "7/8", beatsPerBar: 7, beatUnit: 8 },
-    { id: "9-8", label: "9/8", beatsPerBar: 9, beatUnit: 8 },
-    { id: "12-8", label: "12/8", beatsPerBar: 12, beatUnit: 8 }
+    { id: "2-4", label: "2/4", numerator: 2, beatsPerBar: 2, beatUnit: 4 },
+    { id: "3-4", label: "3/4", numerator: 3, beatsPerBar: 3, beatUnit: 4 },
+    { id: "4-4", label: "4/4", numerator: 4, beatsPerBar: 4, beatUnit: 4 },
+    { id: "5-4", label: "5/4", numerator: 5, beatsPerBar: 5, beatUnit: 4 },
+    { id: "6-8", label: "6/8", numerator: 6, beatsPerBar: 2, beatUnit: 8, compound: true },
+    { id: "7-8", label: "7/8", numerator: 7, beatsPerBar: 7, beatUnit: 8 },
+    { id: "9-8", label: "9/8", numerator: 9, beatsPerBar: 3, beatUnit: 8, compound: true },
+    { id: "12-8", label: "12/8", numerator: 12, beatsPerBar: 4, beatUnit: 8, compound: true }
 ]
 
 var SUBDIVISIONS = [
-    { id: "quarter", label: "Quarter", ticksPerBeat: 1 },
-    { id: "eighth", label: "Eighth", ticksPerBeat: 2 },
-    { id: "triplet", label: "Triplet", ticksPerBeat: 3 },
-    { id: "sixteenth", label: "Sixteenth", ticksPerBeat: 4 }
+    // IDs remain stable for persisted v0.1-v0.3 state. Labels describe the
+    // actual click multiplier in every meter; written note values depend on
+    // whether the selected beat is a quarter, eighth or dotted quarter.
+    { id: "quarter", label: "Beat", ticksPerBeat: 1 },
+    { id: "eighth", label: "2 / beat", ticksPerBeat: 2 },
+    { id: "triplet", label: "3 / beat", ticksPerBeat: 3 },
+    { id: "sixteenth", label: "4 / beat", ticksPerBeat: 4 }
 ]
 
 function finiteNumber(value, fallback) {
@@ -50,10 +53,9 @@ function subdivisionById(id) {
     return SUBDIVISIONS[0]
 }
 
-// One "beat" is one count of the time signature's numerator (a quarter note
-// in a /4 meter, an eighth note in a /8 meter); BPM always measures that
-// beat directly rather than a compound dotted pulse, so the same number
-// entered by the player means the same thing across every meter.
+// BPM measures the musical beat: a quarter in simple /4 meters and a dotted
+// quarter in compound 6/8, 9/8 and 12/8. Selecting three subdivisions per
+// beat therefore produces the written eighth notes in those compound meters.
 function beatDurationSeconds(bpm) {
     return 60 / clampBpm(bpm)
 }
