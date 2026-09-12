@@ -22,7 +22,8 @@ scheduling API, reachable from a third-party plugin. Two different local helper
 processes (spawned via `Quickshell.Io.Process`, stdio-only, no network) handle the two
 jobs that must be audio-clock-accurate rather than UI-timer-accurate:
 
-- `helper/metronome_engine.py` renders the metronome's PCM click track and pipes it to
+- `helper/audio_engine.py` renders the metronome's PCM click track (or, in drone mode,
+  a sustained sine tone at a given frequency) and pipes it to
   `pw-cat --playback`. Pacing comes from the audio sink's own blocking write, not from
   `sleep()`/QML `Timer` — the classic "schedule against the hardware clock" pattern,
   which is immune to UI-thread jitter and desktop load. It reports each rendered beat
@@ -53,17 +54,42 @@ spawned.
 State lives at `$XDG_STATE_HOME/omarchy/fretboard/state.json` (falling back to
 `~/.local/state`), written with the same atomic pattern as `omarchy-departures`:
 serialize, write to a `mktemp` sibling with `umask 077`, `mv -f` into place. A
-`schemaVersion` field gates migration; unreadable/corrupt state is quarantined
-(renamed aside) rather than crashing the plugin, and the service starts from safe
-in-memory defaults. Built-in reference data (tunings, scales, chords, starter
-exercises) ships as code, not as persisted rows — user-created rows (custom tunings,
-routines, exercises, songs, sessions, exercise progress, preferences) are the only
-things written to disk, kept in separate top-level keys from anything seeded.
+`schemaVersion` field gates migration (`js/storage.js`). Invalid JSON or an
+unexpected shape never crashes the plugin: `Storage.decode` reports `ok: false`, the
+service falls back to safe in-memory defaults for that run, and — matching
+`omarchy-departures`'s "keeping it untouched" approach — the unreadable file on disk
+is left exactly as it was rather than being overwritten, so nothing is silently lost;
+it's only replaced once the user makes a change that triggers a fresh save. Within an
+otherwise-valid file, individual malformed rows (a routine missing an `id`, a session
+missing `startedAt`, …) are dropped rather than failing the whole load, and missing
+top-level keys are backfilled from defaults.
+
+Built-in reference data (tunings, scales, chords, the starter exercise library) ships
+as code in `js/tunings.js` / `js/theory.js` / `js/exercises.js` and is never written to
+disk. Only user-created rows persist, each in its own top-level key so a shipped
+default can never collide with something the user made:
+
+| Key | Shape | Notes |
+|---|---|---|
+| `preferences` | `{ a4, defaultTuningId, metronomeVolume, lastTimeSignatureId, lastSubdivisionId, tunerInputDevice }` | Single object |
+| `customTunings` | `[{ id, name, notes: string[], custom: true }]` | `notes` are `"E2"`-style strings, low string first |
+| `routines` | `[{ id, name, items: [{ id, type, label, durationMinutes, targetBpm, metronome, scaleKey, notes, status }], createdAt, updatedAt }]` | `type` is one of `js/routines.js`'s `ITEM_TYPES` |
+| `exercises` | `[{ id, name, type, description, startBpm, targetBpm, scaleId? }]` | User-created only; same shape as a built-in exercise |
+| `songs` | `[{ id, title, artist, tuning, key, originalBpm, currentBpm, targetBpm, notes }]` | No lyrics/tab fields by design |
+| `sessions` | `[{ startedAt, durationMinutes, routineId?, routineName? }]` | Practice history, one row per completed session/routine run |
+| `exerciseProgress` | `{ [exerciseId]: { bestBpm, goalBpm, history: [{ at, bpm, outcome }] } }` | `outcome` is `clean` \| `nearly` \| `needs_work` |
 
 ## UI
 
 Panel content is built from the shared `qs.Ui` kit (`Panel`, `KeyboardPanel`,
-`PanelKeyCatcher`, `ButtonGroup`, `Dropdown`, `NumberField`, `PanelSlider`, `Toggle`,
-`Button`) and `qs.Commons` (`Style`, `Color`) tokens exactly like first-party panels,
-so theming (dark/light/theme palettes, corner rounding, spacing scale) and keyboard
-navigation (Tab/h/j/k/l, Escape) come for free instead of being reimplemented.
+`ButtonGroup`, `Dropdown`, `NumberField`, `PanelSlider`, `Toggle`, `Button`) and
+`qs.Commons` (`Style`, `Color`) tokens exactly like first-party panels, so theming
+(dark/light/theme palettes, corner rounding, spacing scale) comes for free instead of
+being reimplemented. Keyboard use relies on Qt Quick's own Tab-focus-chain traversal
+across every `activeFocusOnTab` control (`ButtonGroup`, `Dropdown`, `Toggle`, text
+fields, `NumberField`'s spin box) plus `focusable: true` on the panel's action buttons,
+rather than `qs.Ui`'s `PanelKeyCatcher` cursor model: that component always marks Tab
+as accepted for a panel-owned cursor/`hasCursor` highlight scheme, and reimplementing
+that scheme across four fairly dense section views was judged not worth it for this
+build. `ButtonGroup`'s own Left/Right/h/l + Enter/Space handling still works once Tab
+reaches it, and Escape closes the panel from a plain `Keys.onEscapePressed`.
