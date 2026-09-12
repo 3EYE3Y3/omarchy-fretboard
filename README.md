@@ -1,172 +1,187 @@
 # Fretboard
 
-> A guitar practice companion for the Omarchy bar.
+**Your guitar practice room, built into the Omarchy bar.**
 
-Fretboard combines the tools a guitarist actually reaches for in a practice session —
-metronome, tempo trainer, practice timer, chromatic tuner, fretboard/scale/chord
-reference, and practice routines with history — into one native Omarchy bar widget and
-panel, instead of a pile of separate mini-apps.
+![Fretboard showing the Minor Pentatonic Box 1 guided practice session](preview.png)
 
-## Features
+Fretboard brings the tools you actually use while practising guitar into one focused
+Omarchy panel.
 
-**Practice essentials**
-- Metronome: 30–300 BPM, tap tempo, audible click with accent on beat 1, visual beat
-  indicator, volume control, 2/4 · 3/4 · 4/4 · 5/4 · 6/8 · 7/8 · 9/8 · 12/8 time
-  signatures, and meter-neutral beat/2-per-beat/3-per-beat/4-per-beat click divisions
-- Tempo trainer: start/target BPM, configurable increment by elapsed time or bar count
-- Practice timer: 5/10/15/20/30/45/60-minute presets or a custom duration, with optional
-  metronome linking
-- Chromatic tuner: note, octave, frequency, cents off, adjustable A4 reference,
-  input-device selection, and a Quiet/Normal/Noisy Room sensitivity setting —
-  chromatic detection works for any instrument, not just guitar
+Tune up, start a metronome, choose from 40 guided practice sessions, explore scales
+and chords across the fretboard, build your own routines, and track your progress.
 
-**Guitar reference**
-- Interactive fretboard, 24+ frets, 8 built-in tunings (Standard, Drop D, D Standard,
-  Drop C, Eb Standard, Open G, Open D, DADGAD) plus custom tunings
-- 14 scale/mode entries (including explicit Ionian and Aeolian aliases), canonical
-  formulas, practical key-aware spelling, and note names or interval labels across
-  every matching tone on all six strings from the open strings through fret 12
-- Verified A-minor-pentatonic Box 1–5 filters retain that complete map while strongly
-  emphasizing the selected box; verified major/minor/diminished/augmented triad
-  inversion and adjacent-string-set filters use the same stable 0–12 view
-- 11 chord families with audited open and movable E-root/A-root shapes in Standard
-  tuning; alternate tunings retain accurate chord-tone maps but deliberately do not
-  claim that Standard-tuning shapes still apply
-- Circle of fifths with relative major/minor, accidentals, and both names at the
-  F#/Gb and Db/C# enharmonic seam, wired into the reference view
-- Drone/reference tone sharing the tuner's A4 setting
+**No account. No cloud. No telemetry. Just pick up your guitar and practise.**
 
-**Practice coach**
-- Routines is a first-class Practice tab (second, right beside Metronome) with two
-  parts: **Practice Sessions**, a curated bank of 40 built-in presets across 7
-  categories (Warmups, Scales, Scale Patterns, Triads, Chords, Technique, Rhythm) that
-  you can filter by category and choose from a compact Routine dropdown, then preview
-  only that routine in a bounded detail pane, start immediately, or duplicate it into an editable routine
-  without ever touching the built-in template; and **My Routines**, your own saved
-  routines copied from verified sessions, with rename/reorder/remove, duplicate,
-  delete, and "start entire routine"
-- Starting a routine or preset configures its required tuning, scale/chord and
-  fretboard, the
-  metronome or tempo trainer, and the timer for you, and shows a visual aid alongside
-  it — either a six-string, open-to-fret-12 pitch-membership map or an explicit data-driven
-  position/box/3NPS/triad/chord/pattern/path/picking/rhythm visual (with roots distinct, interval-label
-  toggle, fret numbers and string names), plus the written sequence and picking
-  directions where applicable — alongside pause/resume, metronome mute and BPM
-  adjustment, all without leaving the routine
-- A small starter exercise library for the standalone-exercise flow (chromatic 1-2-3-4,
-  alternate picking, spider exercise, major scale, minor pentatonic, chord-change
-  drill, string skipping, rhythm subdivision) — architecture supports adding more
-  without a schema change
-- Clean/Nearly/Needs Work outcome tracking with a conservative next-BPM suggestion
-  (user-recorded progress, not objective performance analysis)
-- Song practice entries (title, artist, tuning, key, BPMs, notes — no lyrics/tabs)
-- Local practice history and a Progress view (today/this-week minutes, streak, sessions,
-  recent routines, BPM improvement)
+Requires Omarchy 4.0.3 or later.
 
-No account, no cloud sync, no telemetry, no external API for any core feature.
+## Guided practice
 
-Requires Omarchy 4.0.3 or later (schema version 1 plugin manifest).
+The 40 built-in sessions cover Warmups, Scales, Scale Patterns, Triads, Chords,
+Technique, and Rhythm. Pick a category and routine from compact selectors, then get
+one focused lesson with a useful visual, clear instructions, suggested tempo, and
+duration. Start it and the visual stays on screen while you play.
 
-## Install
+- Full six-string scale maps and verified pentatonic positions
+- Numbered paths for scale sequences, spider drills, and string skipping
+- Picking directions for alternate/economy-picking work
+- Exact triad and chord shapes with interval labels
+- Beat grids for subdivisions, accents, syncopation, and compound 6/8
+- Editable personal routines created from the verified built-ins
+
+## Practice tools
+
+- **Metronome:** 30–300 BPM, tap tempo, beat-one accents, visual beat indicator,
+  volume, eight time signatures, and four click divisions
+- **Tempo trainer:** move from a start tempo to a target by elapsed time or bars
+- **Practice timer:** common presets or a custom duration, optionally linked to the
+  metronome
+- **Progress:** local session history, practice minutes, streaks, and user-recorded
+  Clean/Nearly/Needs Work outcomes with conservative next-tempo suggestions
+
+## Tuner
+
+The chromatic tuner shows note, octave, frequency, and cents offset. It supports an
+adjustable A4 reference, input-device selection, and Quiet/Normal/Noisy Room
+sensitivity modes. Pitch detection is chromatic, so it can also listen to other
+single-note instruments.
+
+![Fretboard's chromatic tuner holding a synthetic in-tune E2](docs/screenshots/tuner.png)
+
+## Reference
+
+Explore 14 scales and modes as complete open-string-to-fret-12 maps. Every matching
+tone is calculated independently across all six strings from the active tuning;
+roots stay distinct, and labels switch between note names and intervals.
+
+Verified A minor pentatonic Boxes 1–5 highlight their exact coordinates without
+hiding the rest of the scale. The same reference includes verified
+major/minor/diminished/augmented triad inversions and string sets, 11 chord families,
+eight built-in tunings, custom tunings, a circle of fifths, and a reference drone.
+
+![A minor pentatonic across all six strings with verified Box 1 highlighted](docs/screenshots/reference.png)
+
+The bundled tunings are Standard, Drop D, D Standard, Drop C, Eb Standard, Open G,
+Open D, and DADGAD. Standard-tuning chord and named-position diagrams are never
+presented as valid shapes under an incompatible tuning; pitch membership still
+recalculates correctly.
+
+## Routines and progress
+
+Practice Sessions are immutable templates. Duplicate one into **My Routines** to
+rename, reorder, remove, or combine its items without changing the original. The
+running view keeps the exercise visual, BPM, timer, metronome state, concise prompt,
+and next/finish controls together while your hands are on the guitar.
+
+Practice history and progress live only on this machine. Fretboard does not analyze
+performance or claim to replace a teacher: outcomes and tempo changes are recorded
+from your input.
+
+## Installation
+
+Add and enable the repository directly:
+
+```bash
+omarchy plugin add https://github.com/3EYE3Y3/omarchy-fretboard.git --enable
+```
+
+Or install it manually:
 
 ```bash
 git clone https://github.com/3EYE3Y3/omarchy-fretboard.git ~/.config/omarchy/plugins/io.github.3eye3y3.fretboard
 omarchy plugin enable io.github.3eye3y3.fretboard right
 ```
 
-(`omarchy plugin add <git-url> --enable` works the same way once the repository is
-public.) Click the guitar icon in the bar to open the panel, or:
+Once listed in the official marketplace, Fretboard can also be installed by its
+permanent plugin ID: `io.github.3eye3y3.fretboard`.
 
-```bash
-omarchy-shell io.github.3eye3y3.fretboard open
-```
-
-## Uninstall
+### Removal
 
 ```bash
 omarchy plugin disable io.github.3eye3y3.fretboard
 omarchy plugin remove io.github.3eye3y3.fretboard --yes
 ```
 
-This removes the plugin's code. Your practice data at
-`$XDG_STATE_HOME/omarchy/fretboard/state.json` (typically
-`~/.local/state/omarchy/fretboard/state.json`) is left in place; delete it yourself if
-you want a clean slate.
+Removal deletes the plugin code. Practice data is deliberately left at
+`$XDG_STATE_HOME/omarchy/fretboard/state.json` (normally
+`~/.local/state/omarchy/fretboard/state.json`) so an uninstall cannot silently erase
+your history. Delete that file yourself for a complete reset.
 
-## Audio dependencies
+## Usage
 
-Fretboard uses PipeWire's own CLI tools — already installed with Omarchy — for audio,
-so there is nothing extra to install for the metronome, drone, or tuner to work:
+Click the guitar icon in the bar to open Fretboard, or run:
 
-- `pw-cat` renders the metronome click and drone tone.
-- `pw-record` captures microphone input for the tuner.
-- `pactl` (from `pipewire-pulse`) lists input devices for the tuner's device picker.
+```bash
+omarchy-shell io.github.3eye3y3.fretboard open
+```
 
-Pitch detection (`helper/pitch_yin.py`) uses [NumPy](https://numpy.org/) for a fast,
-FFT-based YIN implementation when it's importable, and falls back to a smaller-window
-pure-Python implementation otherwise — there is no hard dependency on NumPy, and no
-step you need to take either way.
+The panel starts in **Practice**. Its other main tabs are **Tuner**, **Reference**,
+and **Progress**. All interactive controls participate in the normal Qt keyboard
+focus chain; Escape closes the panel.
 
-See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for why audio work happens in a small
-local helper process rather than in QML directly.
-
-## Tuner limitations
-
-- Detects one fundamental pitch at a time — strumming a full chord will not give a
-  useful reading. Play one note (or a natural harmonic) at a time.
-- Standard guitar range (E2–E4) is where it's tuned to perform best; very low bass notes
-  take a slightly longer analysis window and a moment longer to settle.
-- A noisy room or a very quiet pickup/mic level will show "no signal" rather than a
-  guess — the tuner never reports a note it isn't reasonably confident about. If your
-  room has persistent background noise, try the **Noisy Room** sensitivity setting
-  (Tuner tab); if you play quietly, try **Quiet**. Sensitivity only changes the
-  noise-floor/confidence thresholds the tuner gates on, never microphone gain — turn
-  your input level up in the OS if readings are inconsistent even in a quiet room.
-- The tuner holds the last confirmed note for a short window through natural decay or
-  a brief dropout rather than flickering to "no signal" and back — by design, so
-  expect roughly a quarter- to half-second lag before it reports silence after you
-  mute a string.
-- It is chromatic, not guitar-specific, so it works for bass, ukulele, violin, or voice
-  too; there's just no per-instrument preset beyond the adjustable A4 reference.
-
-## Data
-
-All local state lives in one JSON file (schema-versioned, with migrations and
-malformed-data recovery from the start — see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)):
-preferences, custom tunings, routines, custom exercises, songs, practice sessions, and
-per-exercise BPM progress. Built-in tunings, scales, chords, the starter exercise
-library, and the 40 practice-session presets all ship as code and are never written to
-your data file, so a factory reset never touches anything you created — and duplicating
-a preset into My Routines never edits the built-in template it came from.
-
-## IPC
-
-Beyond the standard `open`/`close`/`show`/`hide`/`toggle`, the bar widget also exposes:
+Optional IPC actions are available for shortcuts:
 
 ```bash
 omarchy-shell io.github.3eye3y3.fretboard startMetronome
 omarchy-shell io.github.3eye3y3.fretboard stopMetronome
-omarchy-shell io.github.3eye3y3.fretboard startPreset <preset-id>   # e.g. preset-warmup-chromatic
+omarchy-shell io.github.3eye3y3.fretboard startPreset preset-warmup-chromatic
 omarchy-shell io.github.3eye3y3.fretboard startRoutine <routine-id>
 ```
 
-useful for binding a hotkey to jump straight into a specific warmup or routine.
+## Audio dependencies
 
-## Keyboard use
+Fretboard uses the PipeWire command-line tools already present in Omarchy:
 
-Panel content uses Qt Quick's built-in Tab-focus-chain traversal rather than a
-hand-rolled cursor: Tab/Shift+Tab moves between dropdowns, number fields, toggles,
-text fields, and button groups (arrow keys/h,l then move within a focused button
-group, Enter/Space activates), and every action button is reachable via Tab too.
-Escape closes the panel.
+- `pw-cat` plays the metronome and drone.
+- `pw-record` captures microphone samples for the tuner.
+- `pactl` lists available tuner input devices.
 
-## Development
+`Service.qml` launches only the bundled local Python helpers, which communicate over
+stdio and in turn launch those local PipeWire tools. They run without privileges,
+make no network requests, and terminate their PipeWire children on shutdown.
+
+Pitch detection uses the bundled YIN implementation. NumPy is used for its faster
+FFT path when available, with a tested pure-Python fallback when it is not. No Python
+package installation is required. The complete design and lifecycle are documented
+in [Architecture](docs/ARCHITECTURE.md).
+
+## Privacy and data
+
+Fretboard has no account, cloud service, analytics, advertising, or telemetry. It
+does not contact a remote API at runtime. Microphone audio is processed locally in
+memory for pitch detection and is not recorded to disk or transmitted.
+
+Preferences, custom tunings, routines, songs, practice sessions, and progress are
+stored in one owner-only, atomically replaced JSON file under XDG state storage.
+Built-in music/reference data remains part of the plugin code. See
+[Architecture](docs/ARCHITECTURE.md) for the exact schema.
+
+## Limitations
+
+- The tuner detects one fundamental at a time; play a single note or harmonic, not a
+  full chord.
+- Guitar range E2–E4 is its primary tuning target. Very low bass notes take a little
+  longer to settle.
+- Input level still depends on your system microphone settings. Sensitivity changes
+  confidence/noise gating, not hardware gain.
+- Curated chord diagrams and named pentatonic/triad shapes are verified for Standard
+  tuning. Other tunings receive accurate pitch maps without misleading shape names.
+- Progress is a practice log based on your own outcome selection, not automatic
+  performance grading.
+
+## Development and testing
 
 ```bash
-npm test                    # domain-logic unit tests (node's built-in test runner)
-python3 -m unittest discover -s helper/tests   # audio-helper unit tests
-./scripts/quality            # full gate: tests + omarchy plugin validate + qmllint + git diff --check
+npm test
+python3 -m unittest discover -s helper/tests
+./scripts/quality
 ```
 
-See [TESTING.md](TESTING.md) for the full test/coverage rundown and manual smoke-test
-checklist, and [CHANGELOG.md](CHANGELOG.md) for release history.
+The quality gate also runs `omarchy plugin validate .`, `qmllint`, and
+`git diff --check`. See [Testing](TESTING.md), the independent
+[music-content audit](docs/MUSIC_CONTENT_AUDIT.md), the
+[practice-visual audit](docs/PRACTICE_VISUAL_AUDIT.md), and the
+[changelog](CHANGELOG.md).
+
+## License
+
+Fretboard is available under the [MIT License](LICENSE).

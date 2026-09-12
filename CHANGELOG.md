@@ -22,6 +22,13 @@ personal review.
 ### Added
 - Selector regression coverage for all categories, every built-in preset, source
   switching, persisted IDs, invalid/deleted fallback and selected visual resolution.
+- A privacy-safe marketplace preview and compact README gallery captured from the
+  real v0.3.5 UI with isolated synthetic state.
+
+### Documentation
+- Reworked the README around the complete guitar-practice experience, with product-
+  first guidance, clearer local/offline audio and privacy disclosures, and current
+  installation/removal instructions. No runtime or verified music content changed.
 
 ## [0.3.4] - 2026-09-13
 

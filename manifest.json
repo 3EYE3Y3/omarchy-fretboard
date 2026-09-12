@@ -5,7 +5,7 @@
   "version": "0.3.5",
   "author": "3EYE3Y3",
   "license": "MIT",
-  "description": "A guitar practice companion for the Omarchy bar: metronome, tempo trainer, practice timer, chromatic tuner, fretboard/scale/chord reference, and practice routines with history.",
+  "description": "Guided guitar practice, metronome, tuner, scales, chords and routines — right from the Omarchy bar.",
   "kinds": ["service", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "Fretboard",
-    "description": "Metronome, tuner, and guitar reference. Click to open the practice panel.",
+    "description": "Guided guitar practice, metronome, tuner, scales, chords and routines.",
     "category": "Music",
     "defaultSection": "right",
     "allowMultiple": false,
