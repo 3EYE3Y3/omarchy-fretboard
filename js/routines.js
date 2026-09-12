@@ -23,6 +23,14 @@ function createItem(overrides) {
         metronome: o.metronome || null,
         notes: o.notes || "",
         scaleKey: o.scaleKey || null,
+        // A chord/progression item: { key, chordId }, same shape as scaleKey.
+        chordKey: o.chordKey || null,
+        // Optional [startFret, endFret] window the visual aid should default
+        // to for this item, instead of computing one automatically.
+        fretWindow: Array.isArray(o.fretWindow) && o.fretWindow.length === 2 ? o.fretWindow.slice() : null,
+        // Optional short sequence lines shown as a textual/visual practice
+        // pattern (e.g. ["1-2-3", "2-3-4", "3-4-5"] or picking-direction hints).
+        pattern: Array.isArray(o.pattern) ? o.pattern.slice() : null,
         status: o.status || "pending"
     }
 }
@@ -35,6 +43,25 @@ function createRoutine(name, items) {
         items: (items || []).map(createItem),
         createdAt: now,
         updatedAt: now
+    }
+}
+
+// Built-in preset routines need a stable id (so they can be looked up by
+// name across restarts and never collide with a fresh makeId() call), and
+// carry category/description metadata a user-created routine doesn't need.
+// Presets are authored as code (see js/presets.js) and are never persisted
+// or mutated in place - "editing" one means duplicateRoutine()-ing it into
+// the user's own routines first.
+function createPresetRoutine(id, name, category, description, items) {
+    return {
+        id: id,
+        name: name,
+        category: category,
+        description: description || "",
+        items: (items || []).map(createItem),
+        preset: true,
+        createdAt: 0,
+        updatedAt: 0
     }
 }
 
@@ -83,10 +110,15 @@ function reorderItem(routine, fromIndex, toIndex) {
     return next
 }
 
+// Used both for "duplicate one of my routines" and "copy a built-in preset
+// into My Routines" - either way the result is an ordinary, fully editable
+// user routine: a fresh id, "preset" cleared, and every item re-issued a
+// fresh id so it never aliases the source's.
 function duplicateRoutine(routine) {
     var next = cloneRoutine(routine)
     next.id = makeId("routine")
     next.name = routine.name + " Copy"
+    next.preset = false
     next.items = next.items.map(function (item) { return createItem(Object.assign({}, item, { id: makeId("item"), status: "pending" })) })
     next.createdAt = Date.now()
     next.updatedAt = Date.now()

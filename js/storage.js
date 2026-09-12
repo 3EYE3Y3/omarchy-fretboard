@@ -8,6 +8,8 @@ function finiteNumber(value, fallback) {
     return isFinite(number) ? number : fallback
 }
 
+var TUNER_SENSITIVITIES = ["quiet", "normal", "noisy_room"]
+
 function defaultPreferences() {
     return {
         a4: 440,
@@ -15,7 +17,12 @@ function defaultPreferences() {
         metronomeVolume: 0.8,
         lastTimeSignatureId: "4-4",
         lastSubdivisionId: "quarter",
-        tunerInputDevice: ""
+        tunerInputDevice: "",
+        // Added in v0.3.1. An older state.json simply won't have this key,
+        // and sanitizedPreferences() below fills it in from the default -
+        // no schemaVersion bump or migration step needed for an additive,
+        // backward-compatible preference like this one.
+        tunerSensitivity: "normal"
     }
 }
 
@@ -45,7 +52,8 @@ function sanitizedPreferences(raw) {
         metronomeVolume: Math.max(0, Math.min(1, finiteNumber(raw.metronomeVolume, defaults.metronomeVolume))),
         lastTimeSignatureId: typeof raw.lastTimeSignatureId === "string" && raw.lastTimeSignatureId ? raw.lastTimeSignatureId : defaults.lastTimeSignatureId,
         lastSubdivisionId: typeof raw.lastSubdivisionId === "string" && raw.lastSubdivisionId ? raw.lastSubdivisionId : defaults.lastSubdivisionId,
-        tunerInputDevice: typeof raw.tunerInputDevice === "string" ? raw.tunerInputDevice : defaults.tunerInputDevice
+        tunerInputDevice: typeof raw.tunerInputDevice === "string" ? raw.tunerInputDevice : defaults.tunerInputDevice,
+        tunerSensitivity: TUNER_SENSITIVITIES.indexOf(raw.tunerSensitivity) >= 0 ? raw.tunerSensitivity : defaults.tunerSensitivity
     }
 }
 

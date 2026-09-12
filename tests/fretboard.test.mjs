@@ -38,6 +38,22 @@ test("honors a custom fret count", () => {
   assert.equal(board.strings[0].length, 13)
 })
 
+test("finds a compact position window covering scale tones", () => {
+  // A minor pentatonic: A(9), C(0), D(2), E(4), G(7).
+  const set = { 9: true, 0: true, 2: true, 4: true, 7: true }
+  const window = Fretboard.findPositionWindow(STANDARD, set, 24, 5)
+  assert.equal(window.endFret - window.startFret, 5)
+  assert.ok(window.startFret >= 0)
+  assert.ok(window.endFret <= 24)
+})
+
+test("position window width is configurable and stays in range", () => {
+  const set = { 0: true, 4: true, 7: true } // C major triad tones
+  const window = Fretboard.findPositionWindow(STANDARD, set, 12, 4)
+  assert.equal(window.endFret - window.startFret, 4)
+  assert.ok(window.endFret <= 12)
+})
+
 test("highlights scale/chord tone positions and marks the root", () => {
   const board = Fretboard.buildFretboard(STANDARD, 12)
   // A major pentatonic-ish set for this test: pitch classes 9 (A) and 0 (C).

@@ -15,7 +15,7 @@ test("decodes an empty/missing payload into safe defaults", () => {
 test("round-trips a well-formed state object", () => {
   const state = {
     schemaVersion: 1,
-    preferences: { a4: 442, defaultTuningId: "drop_d", metronomeVolume: 0.5, lastTimeSignatureId: "3-4", lastSubdivisionId: "eighth", tunerInputDevice: "mic-1" },
+    preferences: { a4: 442, defaultTuningId: "drop_d", metronomeVolume: 0.5, lastTimeSignatureId: "3-4", lastSubdivisionId: "eighth", tunerInputDevice: "mic-1", tunerSensitivity: "noisy_room" },
     customTunings: [{ id: "custom-1", name: "Weird", notes: ["E2", "A2", "D3", "G3", "B3", "E4"] }],
     routines: [{ id: "r1", name: "Warmup", items: [] }],
     exercises: [{ id: "e1", name: "Chromatic" }],
@@ -28,6 +28,7 @@ test("round-trips a well-formed state object", () => {
   assert.equal(result.ok, true)
   assert.equal(result.migrated, false)
   assert.equal(result.value.preferences.a4, 442)
+  assert.equal(result.value.preferences.tunerSensitivity, "noisy_room")
   assert.equal(result.value.customTunings.length, 1)
   assert.equal(result.value.routines[0].name, "Warmup")
   assert.equal(result.value.sessions[0].durationMinutes, 10)
@@ -63,6 +64,18 @@ test("fills in missing top-level keys from an older/partial payload", () => {
   assert.equal(result.value.preferences.defaultTuningId, "standard") // filled from defaults
   assert.ok(Array.isArray(result.value.routines))
   assert.ok(Array.isArray(result.value.sessions))
+})
+
+test("defaults tuner sensitivity to normal for a v0.3.0 file that predates the setting", () => {
+  const raw = JSON.stringify({ schemaVersion: 1, preferences: { a4: 440, defaultTuningId: "standard" } })
+  const result = Storage.decode(raw)
+  assert.equal(result.value.preferences.tunerSensitivity, "normal")
+})
+
+test("rejects an unrecognized tuner sensitivity value", () => {
+  const raw = JSON.stringify({ schemaVersion: 1, preferences: { tunerSensitivity: "extremely_loud" } })
+  const result = Storage.decode(raw)
+  assert.equal(result.value.preferences.tunerSensitivity, "normal")
 })
 
 test("marks a schemaVersion-less payload as migrated", () => {

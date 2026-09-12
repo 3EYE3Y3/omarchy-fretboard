@@ -13,6 +13,7 @@ import "js/chord_voicings.js" as Voicings
 import "js/routines.js" as Routines
 import "js/progress.js" as Progress
 import "js/exercises.js" as Exercises
+import "js/presets.js" as Presets
 
 Item {
     id: service
@@ -392,7 +393,7 @@ Item {
     }
 
     function startTuner() {
-        var args = [pythonBin, tunerHelperPath]
+        var args = [pythonBin, tunerHelperPath, "--sensitivity", tunerSensitivity()]
         if (tunerInputDevice) args = args.concat(["--target", tunerInputDevice])
         tunerProcess.command = args
         tunerAvailable = true
@@ -410,6 +411,22 @@ Item {
     function setTunerInputDevice(id) {
         tunerInputDevice = id || ""
         preferences = Object.assign({}, preferences, { tunerInputDevice: tunerInputDevice })
+        requestSave()
+        if (tunerListening) { stopTuner(); startTuner() }
+    }
+
+    function tunerSensitivity() {
+        return preferences.tunerSensitivity || "normal"
+    }
+
+    // Quiet/Normal/Noisy Room only change the noise-floor/confidence
+    // thresholds the tuner helper gates readings with - never microphone
+    // gain - so switching sensitivity means restarting the helper process
+    // with a different --sensitivity argument (same pattern as --target).
+    function setTunerSensitivity(value) {
+        var allowed = ["quiet", "normal", "noisy_room"]
+        if (allowed.indexOf(value) < 0) return
+        preferences = Object.assign({}, preferences, { tunerSensitivity: value })
         requestSave()
         if (tunerListening) { stopTuner(); startTuner() }
     }
@@ -541,17 +558,42 @@ Item {
 
     function startRoutine(id) {
         var routine = routines.find(function (r) { return r.id === id })
+        startRoutineObject(routine)
+    }
+
+    function startPreset(id) {
+        startRoutineObject(Presets.presetById(id))
+    }
+
+    function startRoutineObject(routine) {
         if (!routine || routine.items.length === 0) return
         activeRoutine = routine
         activeRun = Routines.startRun(routine)
         applyRoutineItem(Routines.currentItem(routine, activeRun))
     }
 
+    function duplicatePreset(id) {
+        var found = Presets.presetById(id)
+        if (!found) return null
+        var copy = Routines.duplicateRoutine(found)
+        routines = routines.concat([copy])
+        requestSave()
+        return copy
+    }
+
+    function allPresets() { return Presets.PRESET_ROUTINES }
+    function presetCategories() { return Presets.PRESET_CATEGORIES }
+    function presetsByCategory(category) { return Presets.presetsByCategory(category) }
+    function presetById(id) { return Presets.presetById(id) }
+
     function applyRoutineItem(item) {
         if (!item) return
         if (item.scaleKey) {
             setReferenceKey(item.scaleKey.key || referenceKey)
             setReferenceScale(item.scaleKey.scaleId || referenceScaleId)
+        } else if (item.chordKey) {
+            setReferenceKey(item.chordKey.key || referenceKey)
+            setReferenceChord(item.chordKey.chordId || referenceChordId)
         }
         if (item.metronome) {
             if (item.metronome.timeSignatureId) setTimeSignature(item.metronome.timeSignatureId)
@@ -571,6 +613,29 @@ Item {
         }
         if (item.durationMinutes) startPracticeTimer(item.durationMinutes * 60, false)
         routineAwaitingOutcome = false
+    }
+
+    function activeItem() {
+        if (!activeRoutine || !activeRun) return null
+        return Routines.currentItem(activeRoutine, activeRun)
+    }
+
+    function activeNextItem() {
+        if (!activeRoutine || !activeRun) return null
+        return Routines.nextItem(activeRoutine, activeRun)
+    }
+
+    // The visual aid's fret window for the item currently running: an
+    // author-specified window if the item has one, otherwise a generic
+    // "most scale/chord tones in a compact span" window computed fresh
+    // from the current tuning (see Fretboard.findPositionWindow).
+    function activeItemFretWindow() {
+        var item = activeItem()
+        if (!item) return null
+        if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
+        var tones = currentToneData()
+        if (!tones) return null
+        return Fretboard.findPositionWindow(currentTuning().notes, Theory.pitchClassSet(tones.notes), fretCount, 5)
     }
 
     function advanceRoutine() {

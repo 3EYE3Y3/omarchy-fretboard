@@ -66,6 +66,33 @@ function buildFretboard(tuningNotes, fretCount, preferFlats) {
     return { fretCount: frets, strings: strings }
 }
 
+// Finds a compact, contiguous fret window (default 5 frets wide) that
+// contains as many of the given pitch-class set's notes as possible across
+// every string - i.e. a generic "one position" box for any scale, in any
+// tuning, without hand-tuning a fret range per exercise. Ties favor the
+// lowest (most beginner-friendly) fret.
+function findPositionWindow(tuningNotes, pitchClassSet, fretCount, width) {
+    var frets = Math.max(1, Math.round(fretCount || DEFAULT_FRET_COUNT))
+    var span = Math.max(1, Math.round(width || 5))
+    var board = buildFretboard(tuningNotes, frets)
+    var bestStart = 0
+    var bestCount = -1
+    for (var start = 0; start + span <= frets; start++) {
+        var count = 0
+        for (var s = 0; s < board.strings.length; s++) {
+            for (var f = start; f <= start + span; f++) {
+                var cell = board.strings[s][f]
+                if (cell && pitchClassSet && pitchClassSet[cell.pitchClass]) count++
+            }
+        }
+        if (count > bestCount) {
+            bestCount = count
+            bestStart = start
+        }
+    }
+    return { startFret: bestStart, endFret: bestStart + span }
+}
+
 // Annotates a fretboard's cells in place-safe fashion (returns a new
 // structure) with whether each cell belongs to the given pitch-class set
 // and whether it is the root.
