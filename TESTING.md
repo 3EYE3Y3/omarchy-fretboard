@@ -3,8 +3,8 @@
 ## Automated
 
 ```bash
-npm test                                        # 84 tests, node:test + node:assert/strict
-python3 -m unittest discover -s helper/tests    # 14 tests, stdlib unittest
+npm test                                        # 98 tests, node:test + node:assert/strict
+python3 -m unittest discover -s helper/tests    # 29 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
 
@@ -19,15 +19,17 @@ reimplementation drift between "the logic" and "the tested logic."
 | Pitch/note math | `js/pitch.js` / `tests/pitch.test.mjs` | Frequency→note/octave/cents, adjustable A4, in-tune tolerance, round-trip note→frequency |
 | Tunings | `js/tunings.js` / `tests/tunings.test.mjs` | All 8 built-in tunings, validation, custom-tuning creation/resolution |
 | Scales & chords | `js/theory.js` / `tests/theory.test.mjs` | All 12 scales and 11 chord families construct the correct notes/formula in multiple keys |
-| Fretboard | `js/fretboard.js` / `tests/fretboard.test.mjs` | Note-at-fret math, 24+ fret board construction, scale/chord highlighting and root marking |
+| Fretboard | `js/fretboard.js` / `tests/fretboard.test.mjs` | Note-at-fret math, 24+ fret board construction, scale/chord highlighting and root marking, generic "one position" fret-window search |
 | Chord voicings | `js/chord_voicings.js` / `tests/chord_voicings.test.mjs` | Reproduces the textbook open-E-major shape exactly; invariant checks (root present, only chord tones, playable span) across 7 chords/tunings |
 | Circle of fifths | `js/circle_of_fifths.js` / `tests/circle_of_fifths.test.mjs` | Key order, relative major/minor pairing, sharps/flats, wraparound neighbors |
 | Routines | `js/routines.js` / `tests/routines.test.mjs` | Create/add/update/remove/reorder/duplicate, and the full start→advance→complete run state machine |
 | Progression suggestions | `js/progress.js` / `tests/progress.test.mjs` | Clean/Nearly/Needs Work → next-BPM suggestion (matches the spec's 100→102-105 example), practice-minute/streak/session stats |
-| Persistence & migration | `js/storage.js` / `tests/storage.test.mjs` | Empty/missing file, well-formed round-trip, invalid JSON, malformed-entry recovery, missing-key backfill, schema-version migration flag, preference clamping |
+| Persistence & migration | `js/storage.js` / `tests/storage.test.mjs` | Empty/missing file, well-formed round-trip, invalid JSON, malformed-entry recovery, missing-key backfill, schema-version migration flag, preference clamping, tuner-sensitivity default-fill/rejection |
+| Practice-session presets | `js/presets.js` / `tests/presets.test.mjs` | All 7 categories present, curated size (not empty, not hundreds), unique/stable/namespaced ids, every scale/chord reference is a real id + valid note name, item shape matches `routines.js`'s `createItem` exactly (drift guard), a diatonic-triad-style progression produces one item per chord in order, duplicating a preset clears the `preset` flag and never mutates the source (JSON diff before/after), duplicating a multi-item chord progression preserves every chord |
 | Manifest | `manifest.json` / `tests/manifest.test.mjs` | Schema version, non-reserved id, every kind has a matching, existing entry point |
 | Click-schedule math (Python) | `helper/click_schedule.py` / `helper/tests/test_click_schedule.py` | Same tick/beat/accent math as `js/metronome.js`, verified independently on the audio engine's own side |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
+| Tuner noise-tolerance stabilizer | `helper/tuner_stability.py` / `helper/tests/test_tuner_stability.py` | Silence, low-level broadband noise, and a short single-hop transient never confirm a lock; a clean tone (alone, and under quiet background noise) locks quickly and accurately; a decaying tone is held through most of the decay without drifting to an unrelated pitch and releases exactly once; a steady tone never flickers once locked; Noisy Room requires a louder signal than Normal and Quiet confirms no slower than Noisy Room; every sensitivity preset's parameters are internally consistent; plus fast pure-logic unit tests of the stabilizer's confirm/hold/hysteresis/switch behavior against synthetic frames |
 
 `scripts/quality` also runs `omarchy plugin validate .`, `qmllint` over every `.qml`
 file (informational — the shared `qs.Ui`/`qs.Commons` singletons trip a handful of
@@ -35,54 +37,86 @@ known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
 
-## Manual smoke test
+## Manual smoke test (v0.3.1)
 
-Performed against a live Omarchy 4.0.3 session (see the final report for the exact
-commands/observations from this build):
+Performed against a live Omarchy 4.0.3 session with real audio hardware; see the
+final report for exact commands. All of the following were directly observed via
+`quickshell log`, `ps`/`pgrep`, and screenshots of the live panel (temporarily
+defaulting a `section`/`mode`/`selectedPresetId` property to reach a view with no
+mouse available in this environment, then reverting it before commit — see
+"A hot-reload gotcha worth knowing" in `docs/ARCHITECTURE.md` for why that needed a
+full `omarchy restart shell` rather than just a file save):
 
-- [x] Bar shows the guitar icon; clicking it opens the panel
-- [x] Panel loads with Practice/Tuner/Reference/Progress navigation
-- [x] Metronome start/stop via IPC (`omarchy-shell <id> startMetronome`/`stopMetronome`)
-      spawns/stops `pw-cat` correctly, bar icon reflects running state + live BPM, beat
-      indicator advances in sync with audio
-- [x] Plugin discovered and reloaded live after edits (`Local plugin changed, reloading`
-      in `quickshell log`) with no QML load errors
-- [x] `omarchy plugin validate .` passes
-- [x] Stopping the metronome terminates `pw-cat`; no orphaned audio process left running
-      (confirmed via `ps aux`)
-- [ ] Full mouse-driven click-through of every Tuner/Reference/Progress control —
-      not recorded with screenshots in this environment (no `ydotool`/mouse-automation
-      tool available without a system package install); covered instead by clean
-      `qmllint`, `omarchy plugin validate`, and the fact that these views are built from
-      the exact same `qs.Ui` components (`Dropdown`, `NumberField`, `ButtonGroup`,
-      `PanelSlider`, `Button`) proven live in the Practice/Metronome view above. Re-run
-      this by hand before publishing a release build on a desktop with mouse access.
-- [ ] Tuner against a real guitar (only tested against a live microphone picking up
-      ambient room noise and correctly returning "no signal" below the confidence
-      threshold, and separately against synthetic sine waves at exact guitar-string
-      frequencies in the automated tests)
-- [ ] Full "start entire routine" walkthrough end to end with a real routine on-screen
-- [ ] Reboot/reload persistence (state file survives an `omarchy restart shell`)
+- [x] Practice opens on Metronome by default; **Routines is the second tab**, beside
+      Metronome, ahead of Tempo Trainer and Timer
+- [x] The preset library (Practice Sessions) is immediately visible under Routines,
+      with category chips (All, Warmups, Scales, Scale Patterns, Triads, Chords,
+      Technique, Rhythm) and a Start/Duplicate button per preset
+- [x] Selecting a preset expands an inline preview: description, instructions,
+      sequence (for multi-item progressions), pattern text, and a live fretboard
+      diagram with fret numbers, string names, and root/scale-tone highlighting —
+      verified against "Minor Pentatonic — Box 1"
+- [x] `startPreset` (via the new IPC method) on "Alternate Picking" correctly
+      configured the metronome (70 BPM, eighth-note subdivision), started the click
+      audibly, and the bar icon/panel header both reflected the running BPM live
+- [x] The Routines running view shows the same visual aid (fretboard + pattern text
+      "↓ ↑ ↓ ↑ ↓ ↑ ↓ ↑"), current BPM with +/-/mute controls, a live countdown timer,
+      and Finish/Stop Routine — all while the Practice Sessions browser remains
+      visible below it
+- [x] Tuner tab shows the new Tuner Sensitivity dropdown (Quiet/Normal/Noisy Room,
+      default Normal) with an explanatory hint, alongside the existing device picker
+      and A4 field
+- [x] Live comparison against real ambient electrical hum in the room: **Normal**
+      sensitivity locked onto the hum almost continuously; **Noisy Room** sensitivity
+      reported "no signal" for ~97% of readings (210/217) against the identical input
+      — a clear, measured improvement, not just a theoretical one
+- [x] `omarchy plugin validate .` and `qmllint` pass with no new warnings beyond the
+      pre-existing, known false-positive class
+- [x] Stopping the metronome/preset run terminates `pw-cat`/`pw-record`; only the
+      idle Python helper process remains (by design — see Architecture), confirmed
+      via `ps aux` after each test
+- [x] State persists correctly across a full `omarchy restart shell`, including the
+      new `tunerSensitivity` preference (confirmed by reading `state.json` directly)
+- [x] Fixed in this pass: a fretboard-grid header/row sizing bug (`Row` positioners
+      not reliably picking up implicit height from a `Repeater`-driven child count —
+      fixed with explicit row heights) and a `tempoTrainerPlan` null-dereference
+      logged on every idle Tempo Trainer re-render
+
+Known gaps (unchanged from v0.3.0, same root cause):
+
+- [ ] Full mouse-driven click-through of every remaining control — this environment
+      has no `ydotool`/mouse-automation tool without a system package install;
+      keyboard-based navigation (`wtype`) was attempted but the popup surface does not
+      reliably receive synthetic key events, so verification instead used the
+      temporary-default technique above plus `qmllint`/`omarchy plugin validate` and
+      shared-component reuse (the same `FretboardGrid`/`ChordDiagram`/`qs.Ui` controls
+      proven live elsewhere). Re-run a full click-through by hand on a desktop with
+      mouse access before publishing further.
+- [ ] Tuner sensitivity against a real, deliberately noisy room with an actual guitar
+      (validated against real ambient electrical hum plus extensive synthetic-audio
+      automated tests, not yet against a real guitar note in a loud room)
 
 Suggested manual checklist for whoever picks this up next, in one session:
 
 1. `omarchy plugin enable io.github.3eye3y3.fretboard right`
-2. Click the bar icon → panel opens; Tab through controls to confirm keyboard
-   navigation (ButtonGroups/Dropdowns/NumberFields/Toggles/text fields are
-   `activeFocusOnTab`; plain action buttons are `focusable: true` so Tab reaches Start/
-   Stop, Tap Tempo, Add Item, etc. too)
-2. Practice → Metronome: change BPM by typing, +/-, and tap tempo; change time
-   signature/subdivision while running; confirm the click is audible and on time
-3. Practice → Tempo Trainer: run the spec's 80→120 @ +5 every 2 minutes example
-4. Practice → Timer: start a short preset, let it complete, confirm the "session
-   complete" state and optional metronome linking
-5. Practice → Routines: build a routine with 2-3 items, start it, advance through it,
-   confirm history is recorded in Progress → Overview
-6. Tuner: pick an input device, tune a real string, confirm note/cents/in-tune state
-7. Reference: switch tuning, pick a key + scale, then a chord; confirm fretboard
-   highlighting and chord voicings update; try the circle of fifths and the drone
-8. `omarchy restart shell`, reopen the panel, confirm BPM/tuning/routines/history
-   persisted
-9. Disable the plugin (`omarchy plugin disable ...`) while the metronome/tuner are
-   running; confirm no `pw-cat`/`pw-record`/`audio_engine.py`/`tuner_engine.py`
-   process is left behind (`pgrep -af "pw-cat|pw-record|audio_engine|tuner_engine"`)
+2. Click the bar icon → panel opens on Practice → Metronome; confirm Routines is the
+   second tab. Tab through controls to confirm keyboard navigation.
+3. Routines → Practice Sessions: browse categories, preview a preset from each
+   category, start one, duplicate one into My Routines, confirm the duplicate is
+   editable and the original preset is unchanged
+4. Start a routine/preset with a tempo-tracked item; let it finish or click
+   Next/Finish; confirm the Clean/Nearly/Needs Work prompt appears and recording an
+   outcome updates Progress → Overview's exercise progress
+5. Tempo Trainer: run the spec's 80→120 @ +5 every 2 minutes example
+6. Timer: start a short preset, let it complete, confirm the "session complete" state
+7. Tuner: try all three sensitivity settings against real background noise and a real
+   guitar string; confirm Noisy Room ignores more ambient sound than Normal, and that
+   a clean plucked note still locks promptly under Normal
+8. Reference: switch tuning, pick a key + scale, then a chord; confirm fretboard
+   highlighting, fret numbers/string names, and chord voicings update; try the circle
+   of fifths and the drone
+9. `omarchy restart shell`, reopen the panel, confirm BPM/tuning/routines/history/
+   tuner sensitivity persisted
+10. Disable the plugin while the metronome/tuner are running; confirm no
+    `pw-cat`/`pw-record`/`audio_engine.py`/`tuner_engine.py` process is left behind
+    (`pgrep -af "pw-cat|pw-record|audio_engine|tuner_engine"`)
