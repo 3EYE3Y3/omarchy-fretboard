@@ -26,6 +26,19 @@ test("drop D only lowers the sixth string", () => {
   for (let i = 1; i < 6; i++) assert.equal(dropD.notes[i], standard.notes[i])
 })
 
+test("all alternate tunings match their canonical low-to-high pitches", () => {
+  const expected = {
+    d_standard: ["D2", "G2", "C3", "F3", "A3", "D4"],
+    drop_c: ["C2", "G2", "C3", "F3", "A3", "D4"],
+    eb_standard: ["Eb2", "Ab2", "Db3", "Gb3", "Bb3", "Eb4"],
+    open_g: ["D2", "G2", "D3", "G3", "B3", "D4"],
+    open_d: ["D2", "A2", "D3", "F#3", "A3", "D4"],
+    dadgad: ["D2", "A2", "D3", "G3", "A3", "D4"]
+  }
+  for (const [id, notes] of Object.entries(expected))
+    assert.deepEqual(Array.from(Tunings.builtinTuningById(id).notes), notes, id)
+})
+
 test("validates note-name arrays", () => {
   assert.equal(Tunings.isValidTuning(["E2", "A2", "D3", "G3", "B3", "E4"]), true)
   assert.equal(Tunings.isValidTuning(["E2", "not-a-note"]), false)

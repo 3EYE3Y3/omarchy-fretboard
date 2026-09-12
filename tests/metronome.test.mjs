@@ -29,6 +29,10 @@ test("exposes the required subdivisions", () => {
   assert.deepEqual(ids, ["quarter", "eighth", "triplet", "sixteenth"])
 })
 
+test("subdivision labels state meter-neutral click multipliers", () => {
+  assert.deepEqual(Array.from(Metronome.SUBDIVISIONS, (s) => s.label), ["Beat", "2 / beat", "3 / beat", "4 / beat"])
+})
+
 test("builds an accurate click schedule for 4/4 quarter notes", () => {
   const ticks = Array.from(Metronome.buildClickSchedule({ bpm: 120, timeSignatureId: "4-4", subdivisionId: "quarter", count: 8 }))
   assert.equal(ticks.length, 8)
@@ -53,6 +57,14 @@ test("handles triplet subdivision counts", () => {
   const ticks = Array.from(Metronome.buildClickSchedule({ bpm: 90, timeSignatureId: "4-4", subdivisionId: "triplet", count: 12 }))
   assert.equal(ticks.filter((t) => t.beatIndex === 0).length, 3)
   assert.equal(ticks.filter((t) => t.accent).length, 1)
+})
+
+test("models 6/8 as two dotted-quarter beats split into three eighths", () => {
+  const signature = Metronome.timeSignatureById("6-8")
+  assert.equal(signature.beatsPerBar, 2)
+  const ticks = Array.from(Metronome.buildClickSchedule({ bpm: 60, timeSignatureId: "6-8", subdivisionId: "triplet", count: 12 }))
+  assert.deepEqual(ticks.map((t) => t.beatIndex), [0, 0, 0, 1, 1, 1, 0, 0, 0, 1, 1, 1])
+  assert.deepEqual(ticks.map((t) => t.accent), [true, false, false, false, false, false, true, false, false, false, false, false])
 })
 
 test("resumes a schedule mid-bar from an arbitrary start tick", () => {

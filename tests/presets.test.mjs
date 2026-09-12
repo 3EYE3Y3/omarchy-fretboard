@@ -20,8 +20,22 @@ test("ships a curated bank across all seven required categories", () => {
 })
 
 test("is a sensible curated size, not empty and not hundreds", () => {
+  assert.equal(ALL.length, 40, "every audited built-in preset must stay represented")
   assert.ok(ALL.length >= 20, `expected a real curated bank, got ${ALL.length}`)
   assert.ok(ALL.length <= 60, `expected a curated bank, not hundreds, got ${ALL.length}`)
+})
+
+test("every audited preset item has actionable timing and instruction content", () => {
+  const meters = new Set(["2-4","3-4","4-4","5-4","6-8","7-8","9-8","12-8"])
+  const subdivisions = new Set(["quarter","eighth","triplet","sixteenth"])
+  for (const preset of ALL) for (const item of preset.items) {
+    assert.ok(item.notes.trim().length > 0, `${preset.id}: missing instructions`)
+    assert.ok(item.durationMinutes > 0, `${preset.id}: invalid duration`)
+    assert.ok(item.targetBpm >= 30 && item.targetBpm <= 300, `${preset.id}: invalid BPM`)
+    assert.ok(item.metronome, `${preset.id}: missing metronome configuration`)
+    assert.ok(meters.has(item.metronome.timeSignatureId), `${preset.id}: invalid meter`)
+    assert.ok(subdivisions.has(item.metronome.subdivisionId), `${preset.id}: invalid subdivision`)
+  }
 })
 
 test("every preset has a unique, stable id and is flagged as a preset", () => {

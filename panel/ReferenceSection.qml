@@ -23,7 +23,7 @@ Item {
         { value: "drone", label: "Drone" }
     ]
 
-    readonly property var noteChoices: ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+    readonly property var noteChoices: ["C", "C#", "Db", "D", "D#", "Eb", "E", "F", "F#", "Gb", "G", "G#", "Ab", "A", "A#", "Bb", "B"]
 
     ColumnLayout {
         id: layout
@@ -118,7 +118,7 @@ Item {
                 }
             }
             Text {
-                visible: root.service ? root.service.referenceMode === "chord" : false
+                visible: !!root.currentTones()
                 text: root.currentTones() ? ("Formula: " + root.currentTones().formula) : ""
                 color: Color.foreground
                 opacity: 0.6
@@ -148,6 +148,16 @@ Item {
                             voicing: modelData
                         }
                     }
+                }
+                Text {
+                    visible: root.service ? (root.service.referenceMode === "chord" && root.service.currentChordVoicings().length === 0) : false
+                    text: "Audited chord-shape diagrams are available in Standard tuning. Note and interval membership above remains tuning-aware."
+                    color: Color.foreground
+                    opacity: 0.6
+                    font.family: Style.font.family
+                    font.pixelSize: Style.font.caption
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
                 }
             }
         }
@@ -200,7 +210,7 @@ Item {
                         spacing: 0
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: modelData.major
+                            text: modelData.enharmonicMajor ? modelData.major + "/" + modelData.enharmonicMajor : modelData.major
                             color: (root.service && root.service.referenceKey === modelData.major && root.service.referenceScaleId === "major") ? Color.accent : Color.foreground
                             font.family: Style.font.family
                             font.pixelSize: Style.font.subtitle
@@ -209,7 +219,7 @@ Item {
                         }
                         Text {
                             Layout.alignment: Qt.AlignHCenter
-                            text: modelData.minor
+                            text: modelData.enharmonicMinor ? modelData.minor + "/" + modelData.enharmonicMinor : modelData.minor
                             color: (root.service && root.service.referenceKey + "m" === modelData.minor && root.service.referenceScaleId === "natural_minor") ? Color.accent : Color.foreground
                             opacity: 0.7
                             font.family: Style.font.family

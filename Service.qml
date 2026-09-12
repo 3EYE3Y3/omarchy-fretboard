@@ -9,6 +9,7 @@ import "js/pitch.js" as Pitch
 import "js/tunings.js" as Tunings
 import "js/theory.js" as Theory
 import "js/fretboard.js" as Fretboard
+import "js/visual_shapes.js" as VisualShapes
 import "js/chord_voicings.js" as Voicings
 import "js/routines.js" as Routines
 import "js/progress.js" as Progress
@@ -510,7 +511,7 @@ Item {
         var tuning = currentTuning()
         var chord = Theory.buildChord(referenceKey, referenceChordId)
         if (!chord) return []
-        return Voicings.findVoicings(tuning.notes, Theory.pitchClassSet(chord.notes), chord.rootPitchClass)
+        return Voicings.findVoicings(tuning.notes, Theory.pitchClassSet(chord.notes), chord.rootPitchClass, chord.chordId)
     }
 
     function selectCircleKey(entry, isMinor) {
@@ -588,6 +589,7 @@ Item {
 
     function applyRoutineItem(item) {
         if (!item) return
+        if (item.tuningId) setTuning(item.tuningId)
         if (item.scaleKey) {
             setReferenceKey(item.scaleKey.key || referenceKey)
             setReferenceScale(item.scaleKey.scaleId || referenceScaleId)
@@ -631,11 +633,45 @@ Item {
     // from the current tuning (see Fretboard.findPositionWindow).
     function activeItemFretWindow() {
         var item = activeItem()
-        if (!item) return null
+        if (!item || (!item.scaleKey && !item.chordKey)) return null
+        if (item.visualAid) {
+            var visualWindow = VisualShapes.fretWindow(item.visualAid, currentToneData() ? currentToneData().rootPitchClass : 0)
+            if (visualWindow) return visualWindow
+            if (item.visualAid.mode === VisualShapes.FULL_FRETBOARD_SCALE || item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
+        }
         if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
         var tones = currentToneData()
         if (!tones) return null
         return Fretboard.findPositionWindow(currentTuning().notes, Theory.pitchClassSet(tones.notes), fretCount, 5)
+    }
+
+    function activeVisualBoard() {
+        var item = activeItem()
+        var tones = currentToneData()
+        if (!item || (!item.scaleKey && !item.chordKey) || !tones) return null
+        var board = Fretboard.buildFretboard(currentTuning().notes, fretCount)
+        if (item.visualAid && item.visualAid.mode !== VisualShapes.FULL_FRETBOARD_SCALE) {
+            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, tones.rootPitchClass), tones.rootPitchClass)
+        }
+        return Fretboard.highlightFretboard(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass)
+    }
+
+    function activeItemShowsFretboard() {
+        var item = activeItem()
+        return !!(item && (item.scaleKey || item.chordKey) && currentToneData()
+            && (!item.visualAid || item.visualAid.mode !== VisualShapes.CHORD_SHAPE))
+    }
+
+    function activeItemChordVoicings() {
+        var item = activeItem()
+        if (!item || !item.chordKey || !item.visualAid || item.visualAid.mode !== VisualShapes.CHORD_SHAPE) return []
+        var chord = Theory.buildChord(item.chordKey.key, item.chordKey.chordId)
+        var toneSet = Theory.pitchClassSet(chord.notes)
+        if (item.visualAid.frets) {
+            var exact = Voicings.voicingFromFrets(currentTuning().notes, item.visualAid.frets, toneSet, chord.rootPitchClass, item.label, "as diagrammed")
+            return exact ? [exact] : []
+        }
+        return Voicings.findVoicings(currentTuning().notes, toneSet, chord.rootPitchClass, chord.chordId)
     }
 
     function advanceRoutine() {

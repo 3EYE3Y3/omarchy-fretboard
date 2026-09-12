@@ -100,7 +100,7 @@ with something the user made:
 |---|---|---|
 | `preferences` | `{ a4, defaultTuningId, metronomeVolume, lastTimeSignatureId, lastSubdivisionId, tunerInputDevice, tunerSensitivity }` | Single object. `tunerSensitivity` was added in v0.3.1 as a plain additive default (see below) - no migration needed |
 | `customTunings` | `[{ id, name, notes: string[], custom: true }]` | `notes` are `"E2"`-style strings, low string first |
-| `routines` | `[{ id, name, items: [{ id, type, label, durationMinutes, targetBpm, metronome, scaleKey, chordKey, fretWindow, pattern, notes, status }], createdAt, updatedAt }]` | `type` is one of `js/routines.js`'s `ITEM_TYPES`. `chordKey`/`fretWindow`/`pattern` added in v0.3.1 so a duplicated preset's chord/pattern data survives the copy |
+| `routines` | `[{ id, name, items: [{ id, type, label, durationMinutes, targetBpm, metronome, scaleKey, chordKey, tuningId, visualAid, fretWindow, pattern, notes, status }], createdAt, updatedAt }]` | `type` is one of `js/routines.js`'s `ITEM_TYPES`. `visualAid` separates full pitch-set maps from exact guitar shapes; missing fields on older saved routines remain valid and fall back safely |
 | `exercises` | `[{ id, name, type, description, startBpm, targetBpm, scaleId? }]` | User-created only; same shape as a built-in exercise |
 | `songs` | `[{ id, title, artist, tuning, key, originalBpm, currentBpm, targetBpm, notes }]` | No lyrics/tab fields by design |
 | `sessions` | `[{ startedAt, durationMinutes, routineId?, routineName? }]` | Practice history, one row per completed session/routine run |
@@ -112,7 +112,7 @@ preference or item field with a sensible default (like `tunerSensitivity`) doesn
 `sanitizedPreferences`/`createItem` already backfill any key an older file is missing,
 so old data keeps loading correctly with no extra step.
 
-## Practice-session presets (v0.3.1)
+## Practice-session presets (v0.3.2 audit)
 
 `js/presets.js` authors 40 built-in routines directly in the same shape
 `js/routines.js`'s `createItem`/routine objects use, rather than importing
@@ -126,9 +126,9 @@ silently drift apart.
 
 Each preset is a `{ id, name, category, description, items, preset: true }` routine
 with a **stable, hand-assigned id** (`preset-*`) instead of `routines.js`'s normal
-random id, so it can be looked up by name across restarts. A chord progression (e.g.
-"I-IV-V Progression") is authored as one item per chord sharing the same tempo/time
-signature, so stepping through it reuses the existing routine runner
+random id, so it can be looked up by name across restarts. A chord shape study is
+authored as one item per chord sharing the same tempo/time signature, so selecting
+Next reuses the existing routine runner
 (`advanceRoutine`) instead of needing a new "sub-step" concept.
 
 Presets are immutable by construction, not by convention: nothing in `Service.qml`
@@ -138,28 +138,26 @@ duplicatePreset`), which clears the `preset` flag, issues a fresh routine id and
 item ids, and appends the result to `routines` - the source object is untouched
 (verified by a test that diffs the preset's JSON before/after a duplicate call).
 
-## Shared visual-aid components (v0.3.1)
+## Visual semantics and shared components (v0.3.2)
 
-`panel/FretboardGrid.qml` (fret numbers, string names, highlighted scale/chord tones,
-root distinction, interval-label toggle, and an optional `startFret`/`endFret`
-display window) and `panel/ChordDiagram.qml` (a compact chord-box diagram for one
-`js/chord_voicings.js` voicing) were extracted from `ReferenceSection.qml` into
-standalone files specifically so the Routines running view and the preset preview
-could reuse them instead of hand-building a second copy per feature - "do not create
-bespoke QML for each exercise" extends to the viewer, not just the data. The Routines
-running view drives them from the *live* service state (`currentFretboard()`,
-`currentToneData()`, `currentChordVoicings()`, `activeItemFretWindow()`) since
-`applyRoutineItem` already points those at the running item; the preset *preview* (not
-yet started) computes the same data locally and read-only, from the preset's own item
-straight through `Theory`/`Fretboard`/`Voicings`, specifically so browsing presets
-never mutates the live Reference tab's selection.
+Pitch-set membership and guitar fingering are different data. `js/visual_shapes.js`
+therefore gives every visual claim an explicit mode: `FULL_FRETBOARD_SCALE`,
+`POSITION`, `PENTATONIC_BOX`, `THREE_NOTES_PER_STRING`, `TRIAD_SHAPE`, `CHORD_SHAPE`,
+or `PATTERN`. Named shapes carry exact low-to-high string-index/fret coordinates and
+a required tuning. A full-fretboard map remains valid in any tuning, but is never
+presented as a Box, Position or 3NPS fingering.
 
-`Fretboard.findPositionWindow(tuningNotes, pitchClassSet, fretCount, width)` picks a
-generic "one position" box - a fixed-width fret window containing the most scale/chord
-tones across every string - so scale-type items get a compact, readable diagram
-without any exercise hand-tuning a fret range. It's a density search, not a lookup of
-named shapes (a real player's "box 1," "box 2," etc.), so it won't always reproduce a
-textbook fingering; preset copy is written to avoid overpromising exact shapes.
+`panel/FretboardGrid.qml` renders either the complete pitch-class membership map or
+only those exact coordinates. `panel/ChordDiagram.qml` renders an audited shape from
+`js/chord_voicings.js`. Preset preview resolves the preset's required tuning without
+mutating live state; starting it applies that tuning before rendering. Chord diagrams
+are restricted to Standard tuning, while the Reference fretboard continues to show
+correct tuning-aware chord membership in all built-in/custom tunings.
+
+`Fretboard.findPositionWindow(...)` remains available for unlabelled legacy/custom
+items, but its density result is not evidence of a conventional shape and no audited
+built-in uses it for a named positional claim. The complete evidence and preset review
+matrix are in `docs/MUSIC_CONTENT_AUDIT.md`.
 
 ## UI
 

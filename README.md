@@ -12,7 +12,7 @@ panel, instead of a pile of separate mini-apps.
 **Practice essentials**
 - Metronome: 30–300 BPM, tap tempo, audible click with accent on beat 1, visual beat
   indicator, volume control, 2/4 · 3/4 · 4/4 · 5/4 · 6/8 · 7/8 · 9/8 · 12/8 time
-  signatures, quarter/eighth/triplet/sixteenth subdivisions
+  signatures, and meter-neutral beat/2-per-beat/3-per-beat/4-per-beat click divisions
 - Tempo trainer: start/target BPM, configurable increment by elapsed time or bar count
 - Practice timer: 5/10/15/20/30/45/60-minute presets or a custom duration, with optional
   metronome linking
@@ -23,12 +23,14 @@ panel, instead of a pile of separate mini-apps.
 **Guitar reference**
 - Interactive fretboard, 24+ frets, 8 built-in tunings (Standard, Drop D, D Standard,
   Drop C, Eb Standard, Open G, Open D, DADGAD) plus custom tunings
-- 12 scales/modes (major, natural minor, major/minor pentatonic, blues, harmonic minor,
-  melodic minor, and the modes) with note names or interval labels on the fretboard
-- 11 chord families with algorithmically found, playable voicings (not a hand-typed
-  diagram database, so it works for any tuning)
-- Circle of fifths with relative major/minor and sharps/flats, wired into the reference
-  view
+- 14 scale/mode entries (including explicit Ionian and Aeolian aliases), canonical
+  formulas, practical key-aware spelling, and note names or interval labels on the
+  fretboard
+- 11 chord families with audited open and movable E-root/A-root shapes in Standard
+  tuning; alternate tunings retain accurate chord-tone maps but deliberately do not
+  claim that Standard-tuning shapes still apply
+- Circle of fifths with relative major/minor, accidentals, and both names at the
+  F#/Gb and Db/C# enharmonic seam, wired into the reference view
 - Drone/reference tone sharing the tuner's A4 setting
 
 **Practice coach**
@@ -39,13 +41,14 @@ panel, instead of a pile of separate mini-apps.
   without ever touching the built-in template; and **My Routines**, your own saved
   routines built from warmup/scales/chord-change/technique/song/free practice/
   ear-training/custom blocks, with reorder, duplicate, and "start entire routine"
-- Starting a routine or preset configures the scale/chord and fretboard, the
+- Starting a routine or preset configures its required tuning, scale/chord and
+  fretboard, the
   metronome or tempo trainer, and the timer for you, and shows a visual aid alongside
-  it — a fretboard diagram (root distinct from other tones, interval-label toggle,
-  fret numbers, string names, auto-picked "one position" window) or chord diagram for
-  scale/chord-based items, a plain-text pattern/sequence for pattern and technique
-  drills — plus pause/resume, a metronome mute toggle, and BPM adjustment, all without
-  leaving the routine
+  it — either a full-fretboard pitch-membership map or an explicit data-driven
+  position/box/3NPS/triad/chord/pattern shape (with roots distinct, interval-label
+  toggle, fret numbers and string names), plus the written sequence and picking
+  directions where applicable — alongside pause/resume, metronome mute and BPM
+  adjustment, all without leaving the routine
 - A small starter exercise library for the standalone-exercise flow (chromatic 1-2-3-4,
   alternate picking, spider exercise, major scale, minor pentatonic, chord-change
   drill, string skipping, rhythm subdivision) — architecture supports adding more
