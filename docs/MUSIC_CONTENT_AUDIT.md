@@ -1,4 +1,16 @@
-# Fretboard v0.3.2 music-content correctness audit
+# Fretboard music-content correctness audit
+
+## v0.3.3 scale-visualization follow-up
+
+General scale/mode references now have an explicit six-string, frets 0–12 visual
+contract. Every matching tone is calculated from each active tuning string; open
+strings and roots are included where applicable. Literal fixtures cover A minor
+pentatonic, C major, G major, A natural minor and D Dorian, plus alternate-tuning
+recalculation. Named boxes, positions, 3NPS forms, triads, chord shapes and patterns
+remain coordinate-only and were regression-checked unchanged. See `TESTING.md` for
+the follow-up live-review record.
+
+## v0.3.2 comprehensive audit
 
 Audit date: 2026-09-12. Scope: the v0.3.1 theory model, fretboard/reference views,
 all named guitar shapes, chord voicings, tunings, circle of fifths, metronome model,

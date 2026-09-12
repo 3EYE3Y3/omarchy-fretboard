@@ -7,6 +7,7 @@ import "../js/tunings.js" as Tunings
 import "../js/theory.js" as Theory
 import "../js/circle_of_fifths.js" as Circle
 import "../js/pitch.js" as Pitch
+import "../js/visual_shapes.js" as VisualShapes
 
 Item {
     id: root
@@ -132,6 +133,8 @@ Item {
                 stringLabels: root.stringLabels()
                 showIntervals: root.service ? root.service.showIntervals : false
                 toneData: root.currentTones()
+                startFret: root.service && root.service.referenceMode === "scale" ? VisualShapes.FULL_FRETBOARD_START_FRET : 0
+                endFret: root.service && root.service.referenceMode === "scale" ? VisualShapes.FULL_FRETBOARD_END_FRET : -1
             }
 
             ColumnLayout {

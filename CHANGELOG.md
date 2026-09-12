@@ -2,6 +2,28 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.3] - 2026-09-12
+
+Scale-visualization correctness release. Marketplace preparation remains paused
+pending personal review.
+
+### Fixed
+- General scale and mode references now render every matching pitch on every string
+  from the open strings through fret 12 instead of presenting an initially clipped
+  24-fret scroll surface or falling back to a density-selected position window.
+- Full-scale practice aids now use the same explicit open-to-octave visual contract.
+  Named positions, pentatonic boxes, 3NPS forms, patterns, triads and chords retain
+  their exact canonical coordinates and compact coordinate-derived ranges.
+- `FretboardGrid` clamps requested ranges to the board before independently slicing
+  each string, keeping its fret header and all six rows synchronized.
+
+### Added
+- Literal six-string fixtures for A minor pentatonic, C major, G major, A natural
+  minor and D Dorian over frets 0–12, covering completeness, roots, open strings,
+  interval labels and exclusion of non-scale tones.
+- An alternate-tuning fixture proving that full maps recalculate positions from the
+  actual open-string pitches.
+
 ## [0.3.2] - 2026-09-12
 
 Correctness audit release. Marketplace preparation remains paused pending personal

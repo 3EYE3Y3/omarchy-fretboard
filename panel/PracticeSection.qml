@@ -397,9 +397,10 @@ Item {
             var tonesForAid = previewToneData(item)
             var visualWindow = VisualShapes.fretWindow(item.visualAid, tonesForAid ? tonesForAid.rootPitchClass : 0)
             if (visualWindow) return visualWindow
-            if (item.visualAid.mode === VisualShapes.FULL_FRETBOARD_SCALE || item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
+            if (item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
         }
         if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
+        if (item.scaleKey) return VisualShapes.fullFretboardWindow()
         var tones = previewToneData(item)
         if (!tones) return null
         return Fretboard.findPositionWindow(root.previewTuning(item).notes, Theory.pitchClassSet(tones.notes), root.service.fretCount, 5)

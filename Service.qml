@@ -627,19 +627,20 @@ Item {
         return Routines.nextItem(activeRoutine, activeRun)
     }
 
-    // The visual aid's fret window for the item currently running: an
-    // author-specified window if the item has one, otherwise a generic
-    // "most scale/chord tones in a compact span" window computed fresh
-    // from the current tuning (see Fretboard.findPositionWindow).
+    // General scales use the complete open-to-octave reference range. Exact
+    // positional modes derive their window from their canonical coordinates.
+    // The density helper remains only as a legacy fallback for unclassified
+    // chord material; it must never turn a plain scale into a fake position.
     function activeItemFretWindow() {
         var item = activeItem()
         if (!item || (!item.scaleKey && !item.chordKey)) return null
         if (item.visualAid) {
             var visualWindow = VisualShapes.fretWindow(item.visualAid, currentToneData() ? currentToneData().rootPitchClass : 0)
             if (visualWindow) return visualWindow
-            if (item.visualAid.mode === VisualShapes.FULL_FRETBOARD_SCALE || item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
+            if (item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
         }
         if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
+        if (item.scaleKey) return VisualShapes.fullFretboardWindow()
         var tones = currentToneData()
         if (!tones) return null
         return Fretboard.findPositionWindow(currentTuning().notes, Theory.pitchClassSet(tones.notes), fretCount, 5)

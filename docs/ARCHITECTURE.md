@@ -138,14 +138,15 @@ duplicatePreset`), which clears the `preset` flag, issues a fresh routine id and
 item ids, and appends the result to `routines` - the source object is untouched
 (verified by a test that diffs the preset's JSON before/after a duplicate call).
 
-## Visual semantics and shared components (v0.3.2)
+## Visual semantics and shared components (v0.3.3)
 
 Pitch-set membership and guitar fingering are different data. `js/visual_shapes.js`
 therefore gives every visual claim an explicit mode: `FULL_FRETBOARD_SCALE`,
 `POSITION`, `PENTATONIC_BOX`, `THREE_NOTES_PER_STRING`, `TRIAD_SHAPE`, `CHORD_SHAPE`,
 or `PATTERN`. Named shapes carry exact low-to-high string-index/fret coordinates and
-a required tuning. A full-fretboard map remains valid in any tuning, but is never
-presented as a Box, Position or 3NPS fingering.
+a required tuning. A full-fretboard scale map is a separate open-to-fret-12 contract:
+every pitch-class match is calculated independently on all six strings from the
+active tuning. It is never presented as a Box, Position or 3NPS fingering.
 
 `panel/FretboardGrid.qml` renders either the complete pitch-class membership map or
 only those exact coordinates. `panel/ChordDiagram.qml` renders an audited shape from
@@ -154,9 +155,10 @@ mutating live state; starting it applies that tuning before rendering. Chord dia
 are restricted to Standard tuning, while the Reference fretboard continues to show
 correct tuning-aware chord membership in all built-in/custom tunings.
 
-`Fretboard.findPositionWindow(...)` remains available for unlabelled legacy/custom
-items, but its density result is not evidence of a conventional shape and no audited
-built-in uses it for a named positional claim. The complete evidence and preset review
+`Fretboard.findPositionWindow(...)` remains available only as a compatibility fallback
+for unclassified legacy chord material. Plain scale items without visual metadata are
+treated as full-scale maps, never as density-derived positions. No audited built-in
+uses the helper for a named positional claim. The complete evidence and preset review
 matrix are in `docs/MUSIC_CONTENT_AUDIT.md`.
 
 ## UI

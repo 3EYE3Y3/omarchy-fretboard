@@ -10,6 +10,8 @@ const Presets = loadQmlJs(new URL("../js/presets.js", import.meta.url))
 
 const STANDARD = ["E2", "A2", "D3", "G3", "B3", "E4"]
 const tuples = (value) => Array.from(value, (p) => Array.from(p))
+const fretsWhere = (row, predicate) => Array.from(row).filter(predicate).map((cell) => cell.fret)
+const plainWindow = (window) => ({ startFret: window.startFret, endFret: window.endFret })
 
 const A_MINOR_BOXES = {
   1: [[0,5],[0,8],[1,5],[1,7],[2,5],[2,7],[3,5],[3,7],[4,5],[4,8],[5,5],[5,8]],
@@ -26,6 +28,36 @@ const A_MINOR_BOX_ROOTS = {
   4: [[1,12],[3,14]],
   5: [[0,5],[3,2],[5,5]]
 }
+
+// Independent open-to-12th-fret fixtures. Rows are ordered low E, A, D, G,
+// B, high E and list every fret that belongs to the named scale.
+const FULL_SCALE_FIXTURES = [
+  {
+    label: "A minor pentatonic", root: "A", scaleId: "minor_pentatonic",
+    frets: [[0,3,5,8,10,12],[0,3,5,7,10,12],[0,2,5,7,10,12],[0,2,5,7,9,12],[1,3,5,8,10],[0,3,5,8,10,12]],
+    roots: [[5],[0,12],[7],[2],[10],[5]], openStrings: [0,1,2,3,5]
+  },
+  {
+    label: "C major", root: "C", scaleId: "major",
+    frets: [[0,1,3,5,7,8,10,12],[0,2,3,5,7,8,10,12],[0,2,3,5,7,9,10,12],[0,2,4,5,7,9,10,12],[0,1,3,5,6,8,10,12],[0,1,3,5,7,8,10,12]],
+    roots: [[8],[3],[10],[5],[1],[8]], openStrings: [0,1,2,3,4,5]
+  },
+  {
+    label: "G major", root: "G", scaleId: "major",
+    frets: [[0,2,3,5,7,8,10,12],[0,2,3,5,7,9,10,12],[0,2,4,5,7,9,10,12],[0,2,4,5,7,9,11,12],[0,1,3,5,7,8,10,12],[0,2,3,5,7,8,10,12]],
+    roots: [[3],[10],[5],[0,12],[8],[3]], openStrings: [0,1,2,3,4,5]
+  },
+  {
+    label: "A natural minor", root: "A", scaleId: "natural_minor",
+    frets: [[0,1,3,5,7,8,10,12],[0,2,3,5,7,8,10,12],[0,2,3,5,7,9,10,12],[0,2,4,5,7,9,10,12],[0,1,3,5,6,8,10,12],[0,1,3,5,7,8,10,12]],
+    roots: [[5],[0,12],[7],[2],[10],[5]], openStrings: [0,1,2,3,4,5]
+  },
+  {
+    label: "D Dorian", root: "D", scaleId: "dorian",
+    frets: [[0,1,3,5,7,8,10,12],[0,2,3,5,7,8,10,12],[0,2,3,5,7,9,10,12],[0,2,4,5,7,9,10,12],[0,1,3,5,6,8,10,12],[0,1,3,5,7,8,10,12]],
+    roots: [[10],[5],[0,12],[7],[3],[10]], openStrings: [0,1,2,3,4,5]
+  }
+]
 
 test("canonical A minor pentatonic Boxes 1-5 have exact string/fret coordinates", () => {
   for (let box = 1; box <= 5; box++) {
@@ -58,6 +90,52 @@ test("root highlighting marks only the literal roots within an exact shape", () 
   for (let s = 0; s < highlighted.strings.length; s++)
     for (const cell of highlighted.strings[s]) if (cell.isRoot) roots.push([s, cell.fret])
   assert.deepEqual(roots, A_MINOR_BOX_ROOTS[1])
+})
+
+test("general scale references map every matching tone on all six strings from frets 0-12", () => {
+  for (const fixture of FULL_SCALE_FIXTURES) {
+    const scale = Theory.buildScale(fixture.root, fixture.scaleId)
+    const toneSet = Theory.pitchClassSet(scale.notes)
+    const board = Fretboard.highlightFretboard(Fretboard.buildFretboard(STANDARD, 12), toneSet, scale.rootPitchClass)
+    assert.equal(board.strings.length, 6, `${fixture.label}: six strings`)
+
+    const actualFrets = []
+    const actualRoots = []
+    const actualOpenStrings = []
+    const intervalsByPitch = Object.fromEntries(Array.from(scale.notes, (note) => [note.pitchClass, note.interval]))
+    for (let s = 0; s < 6; s++) {
+      assert.equal(board.strings[s].length, 13, `${fixture.label}: string ${s} covers 0-12`)
+      actualFrets.push(fretsWhere(board.strings[s], (cell) => cell.highlighted))
+      actualRoots.push(fretsWhere(board.strings[s], (cell) => cell.isRoot))
+      if (board.strings[s][0].highlighted) actualOpenStrings.push(s)
+      for (const cell of board.strings[s]) {
+        assert.equal(cell.highlighted, !!toneSet[cell.pitchClass], `${fixture.label}: string ${s} fret ${cell.fret}`)
+        if (cell.highlighted) assert.ok(intervalsByPitch[cell.pitchClass], `${fixture.label}: interval label at string ${s} fret ${cell.fret}`)
+      }
+    }
+    assert.deepEqual(actualFrets, fixture.frets, `${fixture.label}: complete membership coordinates`)
+    assert.deepEqual(actualRoots, fixture.roots, `${fixture.label}: root coordinates`)
+    assert.deepEqual(actualOpenStrings, fixture.openStrings, `${fixture.label}: open strings`)
+  }
+})
+
+test("full-scale and named-position windows remain distinct", () => {
+  assert.deepEqual(plainWindow(Visual.fullFretboardWindow()), { startFret: 0, endFret: 12 })
+  assert.deepEqual(plainWindow(Visual.fretWindow({ mode: Visual.FULL_FRETBOARD_SCALE }, 9)), { startFret: 0, endFret: 12 })
+  assert.deepEqual(plainWindow(Visual.fretWindow({ mode: Visual.PENTATONIC_BOX, box: 1 }, 9)), { startFret: 5, endFret: 8 })
+  assert.deepEqual(plainWindow(Visual.fretWindow({ mode: Visual.THREE_NOTES_PER_STRING }, 4)), { startFret: 12, endFret: 17 })
+})
+
+test("alternate tunings recalculate a full-scale map from each actual open pitch", () => {
+  const dropD = ["D2", "A2", "D3", "G3", "B3", "E4"]
+  const scale = Theory.buildScale("A", "minor_pentatonic")
+  const board = Fretboard.highlightFretboard(Fretboard.buildFretboard(dropD, 12), Theory.pitchClassSet(scale.notes), scale.rootPitchClass)
+  assert.deepEqual(fretsWhere(board.strings[0], (cell) => cell.highlighted), [0,2,5,7,10,12])
+  assert.deepEqual(fretsWhere(board.strings[0], (cell) => cell.isRoot), [7])
+  assert.equal(board.strings[0][0].name, "D")
+  assert.equal(board.strings[0][0].highlighted, true)
+  assert.equal(board.strings[5][0].name, "E")
+  assert.equal(board.strings[5][0].highlighted, true)
 })
 
 test("all exposed scale and mode formulas have canonical semitone content in all 12 roots", () => {
@@ -198,6 +276,22 @@ test("every shape/box/position-labelled preset carries explicit positional seman
     assert.ok(item.visualAid, `${preset.id} missing visualAid`)
     assert.notEqual(item.visualAid.mode, Visual.FULL_FRETBOARD_SCALE, `${preset.id} mislabeled generic membership`)
   }
+})
+
+test("built-in presets that claim a general scale map use full-fretboard semantics", () => {
+  const expected = [
+    "G Major Pentatonic — Full Fretboard",
+    "D Dorian",
+    "D Phrygian",
+    "D Lydian",
+    "D Mixolydian"
+  ]
+  const actual = []
+  for (const preset of Presets.PRESET_ROUTINES) for (const item of preset.items) {
+    if (!item.scaleKey || !item.visualAid || item.visualAid.mode !== Visual.FULL_FRETBOARD_SCALE) continue
+    actual.push(item.label)
+  }
+  assert.deepEqual(actual, expected)
 })
 
 test("all explicit preset coordinates belong to their advertised scale or chord", () => {

@@ -19,7 +19,8 @@ Flickable {
     property int endFret: -1          // -1 = show the whole board
 
     readonly property int stringCount: board ? board.strings.length : 0
-    readonly property int lastFret: endFret >= 0 ? endFret : (board ? board.fretCount : 0)
+    readonly property int firstFret: board ? Math.max(0, Math.min(startFret, board.fretCount)) : 0
+    readonly property int lastFret: board ? Math.max(firstFret, Math.min(endFret >= 0 ? endFret : board.fretCount, board.fretCount)) : 0
     readonly property int cellSize: Style.space(34)
 
     contentWidth: grid.width
@@ -46,19 +47,19 @@ Flickable {
         spacing: 0
 
         Row {
-            width: (root.lastFret - root.startFret + 1) * root.cellSize + root.cellSize * 0.6
+            width: (root.lastFret - root.firstFret + 1) * root.cellSize + root.cellSize * 0.6
             height: root.cellSize * 0.6
             spacing: 0
             Item { width: root.cellSize * 0.6; height: root.cellSize * 0.6 }
             Repeater {
-                model: Math.max(0, root.lastFret - root.startFret + 1)
+                model: Math.max(0, root.lastFret - root.firstFret + 1)
                 delegate: Text {
                     required property int index
                     width: root.cellSize
                     height: root.cellSize * 0.6
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
-                    text: root.startFret + index
+                    text: root.firstFret + index
                     color: Color.foreground
                     opacity: 0.45
                     font.family: Style.font.family
@@ -72,7 +73,7 @@ Flickable {
             delegate: Row {
                 required property int index
                 readonly property int stringIndex: root.stringCount - 1 - index // highest string on top
-                readonly property var cells: root.board ? root.board.strings[stringIndex].slice(root.startFret, root.lastFret + 1) : []
+                readonly property var cells: root.board ? root.board.strings[stringIndex].slice(root.firstFret, root.lastFret + 1) : []
                 height: root.cellSize
                 spacing: 0
 

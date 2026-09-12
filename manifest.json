@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.3eye3y3.fretboard",
   "name": "Fretboard",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "author": "3EYE3Y3",
   "license": "MIT",
   "description": "A guitar practice companion for the Omarchy bar: metronome, tempo trainer, practice timer, chromatic tuner, fretboard/scale/chord reference, and practice routines with history.",

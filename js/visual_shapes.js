@@ -11,6 +11,12 @@ var TRIAD_SHAPE = "TRIAD_SHAPE"
 var CHORD_SHAPE = "CHORD_SHAPE"
 var PATTERN = "PATTERN"
 
+// General scale/mode references deliberately show a complete octave of the
+// neck, including open strings and the octave repeat at fret 12.  This range
+// is a visual-semantic contract, not a density-selected guitar position.
+var FULL_FRETBOARD_START_FRET = 0
+var FULL_FRETBOARD_END_FRET = 12
+
 var MODES = [FULL_FRETBOARD_SCALE, POSITION, PENTATONIC_BOX,
              THREE_NOTES_PER_STRING, TRIAD_SHAPE, CHORD_SHAPE, PATTERN]
 
@@ -61,7 +67,8 @@ function positionsFor(aid, rootPitchClass) {
 }
 
 function fretWindow(aid, rootPitchClass) {
-    if (!aid || aid.mode === FULL_FRETBOARD_SCALE || aid.mode === CHORD_SHAPE) return null
+    if (!aid || aid.mode === CHORD_SHAPE) return null
+    if (aid.mode === FULL_FRETBOARD_SCALE) return fullFretboardWindow()
     var positions = positionsFor(aid, rootPitchClass)
     if (!positions.length) return null
     var start = positions[0][1]
@@ -71,6 +78,10 @@ function fretWindow(aid, rootPitchClass) {
         end = Math.max(end, positions[i][1])
     }
     return { startFret: start, endFret: end }
+}
+
+function fullFretboardWindow() {
+    return { startFret: FULL_FRETBOARD_START_FRET, endFret: FULL_FRETBOARD_END_FRET }
 }
 
 function supportsTuning(aid, tuningId) {

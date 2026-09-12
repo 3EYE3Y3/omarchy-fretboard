@@ -24,8 +24,8 @@ panel, instead of a pile of separate mini-apps.
 - Interactive fretboard, 24+ frets, 8 built-in tunings (Standard, Drop D, D Standard,
   Drop C, Eb Standard, Open G, Open D, DADGAD) plus custom tunings
 - 14 scale/mode entries (including explicit Ionian and Aeolian aliases), canonical
-  formulas, practical key-aware spelling, and note names or interval labels on the
-  fretboard
+  formulas, practical key-aware spelling, and note names or interval labels across
+  every matching tone on all six strings from the open strings through fret 12
 - 11 chord families with audited open and movable E-root/A-root shapes in Standard
   tuning; alternate tunings retain accurate chord-tone maps but deliberately do not
   claim that Standard-tuning shapes still apply
@@ -44,7 +44,7 @@ panel, instead of a pile of separate mini-apps.
 - Starting a routine or preset configures its required tuning, scale/chord and
   fretboard, the
   metronome or tempo trainer, and the timer for you, and shows a visual aid alongside
-  it — either a full-fretboard pitch-membership map or an explicit data-driven
+  it — either a six-string, open-to-fret-12 pitch-membership map or an explicit data-driven
   position/box/3NPS/triad/chord/pattern shape (with roots distinct, interval-label
   toggle, fret numbers and string names), plus the written sequence and picking
   directions where applicable — alongside pause/resume, metronome mute and BPM
