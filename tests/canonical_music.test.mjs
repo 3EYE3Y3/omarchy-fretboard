@@ -298,6 +298,7 @@ test("all explicit preset coordinates belong to their advertised scale or chord"
   const board = Fretboard.buildFretboard(STANDARD, 24)
   for (const preset of Presets.PRESET_ROUTINES) for (const item of preset.items) {
     if (!item.visualAid || !item.visualAid.positions) continue
+    if (!item.scaleKey && !item.chordKey) continue // technique paths are coordinate claims, not pitch-set claims
     const tones = item.scaleKey ? Theory.buildScale(item.scaleKey.key, item.scaleKey.scaleId) : Theory.buildChord(item.chordKey.key, item.chordKey.chordId)
     const set = Theory.pitchClassSet(tones.notes)
     for (const [s,f] of item.visualAid.positions)

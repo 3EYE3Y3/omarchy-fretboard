@@ -1,5 +1,14 @@
 # Fretboard music-content correctness audit
 
+## v0.3.4 position/highlight and practice-visual follow-up
+
+Reference now retains complete scale/chord-tone context while independently
+emphasizing verified pentatonic boxes or triad inversions/string sets. Every one of
+the 40 built-in sessions has a supported data-driven teaching visual, and the preset
+browser uses stable compact rows plus a separate bounded detail pane. The new source
+notes, 40-row visual/layout matrix and regression evidence are in
+[PRACTICE_VISUAL_AUDIT.md](PRACTICE_VISUAL_AUDIT.md).
+
 ## v0.3.3 scale-visualization follow-up
 
 General scale/mode references now have an explicit six-string, frets 0–12 visual

@@ -3,7 +3,7 @@
 ## Automated
 
 ```bash
-npm test                                        # 122 tests, node:test + node:assert/strict
+npm test                                        # 133 tests, node:test + node:assert/strict
 python3 -m unittest discover -s helper/tests    # 30 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
@@ -27,6 +27,7 @@ reimplementation drift between "the logic" and "the tested logic."
 | Persistence & migration | `js/storage.js` / `tests/storage.test.mjs` | Empty/missing file, well-formed round-trip, invalid JSON, malformed-entry recovery, missing-key backfill, schema-version migration flag, preference clamping, tuner-sensitivity default-fill/rejection |
 | Practice-session presets | `js/presets.js` / `tests/presets.test.mjs` | All 7 categories present, curated size (not empty, not hundreds), unique/stable/namespaced ids, every scale/chord reference is a real id + valid note name, item shape matches `routines.js`'s `createItem` exactly (drift guard), a diatonic-triad-style progression produces one item per chord in order, duplicating a preset clears the `preset` flag and never mutates the source (JSON diff before/after), duplicating a multi-item chord progression preserves every chord |
 | Independent canonical music fixtures | `tests/canonical_music.test.mjs` | Exact A-minor-pentatonic Boxes 1–5 and root coordinates, E-minor Box 1/transposition, literal six-string 0–12 maps for A minor pentatonic/C major/G major/A natural minor/D Dorian, open strings, roots, interval coverage, alternate-tuning recalculation, all formulas in all roots, E-major 3NPS, triad inversions, exact conventional chord shapes, tuning restrictions, and every positional preset coordinate |
+| Position/practice visual contract | `tests/visual_system.test.mjs` | Full context plus exact Box 1–5 emphasis, octave-equivalent 0–12 shapes, roots, A major/minor inversion and four-string-set filters, diminished/augmented triads, all 73 items having a supported/valid visual, rhythm/metronome agreement, correct 6/8 grouping, and stable compact browser rows/list membership across selection |
 | Manifest | `manifest.json` / `tests/manifest.test.mjs` | Schema version, non-reserved id, every kind has a matching, existing entry point |
 | Click-schedule math (Python) | `helper/click_schedule.py` / `helper/tests/test_click_schedule.py` | Same tick/beat/accent math as `js/metronome.js`, verified independently on the audio engine's own side |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
@@ -37,6 +38,16 @@ file (informational — the shared `qs.Ui`/`qs.Commons` singletons trip a handfu
 known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
+
+## Manual position/practice review (v0.3.4)
+
+Real production QML components were rendered through Quickshell's Qt offscreen
+backend at both 800×660 and 600×660. Captures covered A-minor-pentatonic Boxes 1–5,
+A-major root/first/second-inversion filters, every practice category, the requested
+Box 1/major-scale/3NPS/thirds/triad/ii–V–I/picking/spider/string-skip/6–8 cases, a
+rapid first/middle/last selection sequence, and the running Alternate Picking view.
+The final run had no QML reference/type/assignment errors. The complete results are
+recorded in [docs/PRACTICE_VISUAL_AUDIT.md](docs/PRACTICE_VISUAL_AUDIT.md).
 
 ## Manual scale-map review (v0.3.3)
 

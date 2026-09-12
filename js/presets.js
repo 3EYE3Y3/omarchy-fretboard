@@ -46,14 +46,59 @@ var C_MAJOR_POSITION = [[1, 3], [1, 5], [2, 2], [2, 3], [2, 5], [3, 2], [3, 4], 
 var A_NATURAL_MINOR_POSITION = [[0, 5], [0, 7], [0, 8], [1, 5], [1, 7], [1, 8], [2, 5], [2, 7]]
 var G_MAJOR_POSITION = [[0, 3], [0, 5], [0, 7], [1, 3], [1, 5], [1, 7], [2, 4], [2, 5]]
 var A_BLUES_BOX1 = [[0, 5], [0, 8], [1, 5], [1, 6], [1, 7], [2, 5], [2, 7], [3, 5], [3, 7], [3, 8], [4, 5], [4, 8], [5, 5], [5, 8]]
+var E_MAJOR_3NPS_POSITION = [[0,12],[0,14],[0,16],[1,12],[1,14],[1,16],[2,13],[2,14],[2,16],
+    [3,13],[3,14],[3,16],[4,14],[4,16],[4,17],[5,14],[5,16],[5,17]]
 
-function positionAid(id, positions, mode) {
-    return { mode: mode || "POSITION", id: id, tuningId: "standard", positions: positions }
+function visualSteps(labels) { return (labels || []).map(function (label) { return { label: label } }) }
+
+function positionAid(id, positions, mode, labels) {
+    var aid = { mode: mode || "POSITION", id: id, tuningId: "standard", positions: positions }
+    if (labels) { aid.steps = visualSteps(labels); aid.columns = 8 }
+    return aid
 }
-function boxAid(box) { return { mode: "PENTATONIC_BOX", id: "minor-pentatonic-box-" + box, tuningId: "standard", box: box } }
-function threeNpsAid() { return { mode: "THREE_NOTES_PER_STRING", id: "major-3nps-root-string-6", tuningId: "standard" } }
+function boxAid(box, labels) {
+    var aid = { mode: "PENTATONIC_BOX", id: "minor-pentatonic-box-" + box, tuningId: "standard", box: box }
+    if (labels) { aid.steps = visualSteps(labels); aid.columns = 8 }
+    return aid
+}
+function threeNpsAid(kind) {
+    var labels = []
+    for (var i = 0; i < E_MAJOR_3NPS_POSITION.length; i++) {
+        if (kind === "economy") labels.push(["↓","↑","↓"][i % 3])
+        else if (kind === "legato") labels.push(["pick","h","h"][i % 3])
+        else labels.push("S" + (6 - E_MAJOR_3NPS_POSITION[i][0]) + "f" + E_MAJOR_3NPS_POSITION[i][1])
+    }
+    return { mode: "THREE_NOTES_PER_STRING", id: "major-3nps-root-string-6", tuningId: "standard",
+        sequence: E_MAJOR_3NPS_POSITION.map(function (p) { return { string: p[0], fret: p[1] } }),
+        steps: visualSteps(labels), columns: 9 }
+}
 function triadAid(id, positions) { return positionAid(id, positions, "TRIAD_SHAPE") }
-function chordAid(frets, label) { return { mode: "CHORD_SHAPE", id: label || "audited-chord-shape", tuningId: "standard", frets: frets || null } }
+function chordAid(frets, label, labels) {
+    var aid = { mode: "CHORD_SHAPE", id: label || "audited-chord-shape", tuningId: "standard", frets: frets || null }
+    if (labels) { aid.steps = visualSteps(labels); aid.columns = 8 }
+    return aid
+}
+function pathAid(id, positions, labels, mode) {
+    var sequence = []
+    var steps = []
+    for (var i = 0; i < positions.length; i++) {
+        sequence.push({ string: positions[i][0], fret: positions[i][1],
+            label: labels && labels[i] && labels[i].length <= 2 ? labels[i] : String(i + 1) })
+        steps.push({ label: labels && labels[i] ? labels[i] : String(i + 1) })
+    }
+    return { mode: mode || "FRETBOARD_PATH", id: id, tuningId: "standard",
+        positions: positions, sequence: sequence, steps: steps, columns: Math.min(8, Math.max(1, steps.length)) }
+}
+function rhythmAid(id, labels, accents, columns, groupStarts) {
+    var accentSet = {}
+    var groupSet = {}
+    ;(accents || []).forEach(function (n) { accentSet[n] = true })
+    ;(groupStarts || []).forEach(function (n) { groupSet[n] = true })
+    return { mode: "RHYTHM_GRID", id: id, columns: columns || labels.length,
+        steps: labels.map(function (label, index) { return {
+            label: label, accent: !!accentSet[index], groupStart: !!groupSet[index], rest: label === "·"
+        } }) }
+}
 
 var idCounter = 0
 function makeItemId(slug) {
@@ -142,7 +187,10 @@ var PRESET_ROUTINES = [
             label: "Chromatic 1-2-3-4", durationMinutes: 5,
             startBpm: 60, targetBpm: 100, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Choose a comfortable four-fret span (for example frets 5-8). Numbers are fretting fingers: play 1-2-3-4 on each string from 6 to 1, then 4-3-2-1 from string 1 to 6, one note per click.",
-            pattern: ["S6→S1: fingers 1-2-3-4", "S1→S6: fingers 4-3-2-1"]
+            pattern: ["S6→S1: fingers 1-2-3-4", "S1→S6: fingers 4-3-2-1"],
+            visualAid: pathAid("chromatic-1234-frets-5-8",
+                [[0,5],[0,6],[0,7],[0,8],[1,5],[1,6],[1,7],[1,8],[2,5],[2,6],[2,7],[2,8],[3,5],[3,6],[3,7],[3,8],[4,5],[4,6],[4,7],[4,8],[5,5],[5,6],[5,7],[5,8]],
+                ["1","2","3","4","1","2","3","4","1","2","3","4","1","2","3","4","1","2","3","4","1","2","3","4"])
         })),
     preset("preset-warmup-spider", "Spider Exercise", "Warmups",
         "1-3-2-4 finger pattern walked up each pair of strings.",
@@ -150,7 +198,8 @@ var PRESET_ROUTINES = [
             label: "Spider Exercise", durationMinutes: 5,
             startBpm: 60, targetBpm: 100, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "At frets 5-8 play S6f5 (finger 1), S5f7 (3), S6f6 (2), S5f8 (4), one note per click. Repeat on each adjacent string pair; then shift up one fret.",
-            pattern: ["S6f5(1) → S5f7(3) → S6f6(2) → S5f8(4)", "repeat on S5/S4 through S2/S1"]
+            pattern: ["S6f5(1) → S5f7(3) → S6f6(2) → S5f8(4)", "repeat on S5/S4 through S2/S1"],
+            visualAid: pathAid("spider-13-24-seed", [[0,5],[1,7],[0,6],[1,8]], ["1","3","2","4"])
         })),
     preset("preset-warmup-finger-independence", "Finger Independence", "Warmups",
         "Hold fingers down while the others move, to break unwanted finger lift.",
@@ -158,7 +207,8 @@ var PRESET_ROUTINES = [
             label: "Finger Independence", durationMinutes: 5,
             startBpm: 60, targetBpm: 90, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "On one string across four adjacent frets, keep finger 1 lightly planted while 2-3-4 play one note per click. Then keep 1-2 planted while 3-4 move. Stop if the static hold causes pain.",
-            pattern: ["1 planted; 2-3-4 move", "1-2 planted; 3-4 move"]
+            pattern: ["1 planted; 2-3-4 move", "1-2 planted; 3-4 move"],
+            visualAid: pathAid("finger-independence-seed", [[0,5],[0,6],[0,7],[0,8]], ["hold 1","2","3","4"])
         })),
     preset("preset-warmup-string-crossing", "String Crossing Warmup", "Warmups",
         "Alternate-picked string skips to warm up picking-hand accuracy.",
@@ -166,7 +216,9 @@ var PRESET_ROUTINES = [
             label: "String Crossing Warmup", durationMinutes: 5,
             startBpm: 70, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "Fret one comfortable note on each named string. Play one note per eighth-note click with strict alternate picking; mute the skipped string.",
-            pattern: ["↓ S6 → ↑ S4 → ↓ S6 → ↑ S4", "↓ S5 → ↑ S3 → ↓ S5 → ↑ S3"]
+            pattern: ["↓ S6 → ↑ S4 → ↓ S6 → ↑ S4", "↓ S5 → ↑ S3 → ↓ S5 → ↑ S3"],
+            visualAid: pathAid("string-crossing-seed", [[0,5],[2,5],[0,5],[2,5],[1,5],[3,5],[1,5],[3,5]],
+                ["↓ S6","↑ S4","↓ S6","↑ S4","↓ S5","↑ S3","↓ S5","↑ S3"], "PICKING_PATTERN")
         })),
 
     // ---------------------------------------------------------- Scales
@@ -226,7 +278,8 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Numbers are C-major scale degrees, not frets. In the highlighted octave play C-E, D-F, E-G, F-A, G-B, A-C; one note per click.",
             pattern: ["degrees 1-3, 2-4, 3-5", "degrees 4-6, 5-7, 6-8"],
-            visualAid: positionAid("c-major-thirds-source", C_MAJOR_POSITION, "PATTERN")
+            visualAid: positionAid("c-major-thirds-source", C_MAJOR_POSITION, "PATTERN",
+                ["1","3","2","4","3","5","4","6","5","7","6","8"])
         })),
     preset("preset-pattern-four-note", "Scale in 4-Note Sequences", "Scale Patterns",
         "Groups of four scale degrees, shifted up one degree at a time.",
@@ -235,7 +288,8 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Numbers are G-major scale degrees, not frets. Play four consecutive scale notes per group, advancing the start by one degree; one note per click.",
             pattern: ["degrees 1-2-3-4", "2-3-4-5", "3-4-5-6", "4-5-6-7", "5-6-7-8"],
-            visualAid: positionAid("g-major-four-note-source", G_MAJOR_POSITION, "PATTERN")
+            visualAid: positionAid("g-major-four-note-source", G_MAJOR_POSITION, "PATTERN",
+                ["1","2","3","4","2","3","4","5","3","4","5","6","4","5","6","7","5","6","7","8"])
         })),
     preset("preset-pattern-123-234", "1-2-3 / 2-3-4 Pattern", "Scale Patterns",
         "Three-note groups walked up the minor pentatonic shape.",
@@ -244,7 +298,7 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Numbers mean consecutive notes in the repeating five-note A-minor-pentatonic sequence, not diatonic degrees or frets. Continue through the whole Box 1 fingering.",
             pattern: ["notes 1-2-3, 2-3-4, 3-4-5", "then 4-5-6, 5-6-7 … through the box"],
-            visualAid: boxAid(1)
+            visualAid: boxAid(1, ["n1","n2","n3","n2","n3","n4","n3","n4","n5"])
         })),
     preset("preset-pattern-groups-of-four", "Ascend/Descend Groups of Four", "Scale Patterns",
         "Four-note groups that reverse direction before moving on.",
@@ -253,7 +307,8 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Numbers are C-major scale degrees, not frets. Reverse each four-note group before starting one degree higher; one note per click.",
             pattern: ["degrees 1-2-3-4, 4-3-2-1", "2-3-4-5, 5-4-3-2", "3-4-5-6, 6-5-4-3", "4-5-6-7, 7-6-5-4", "5-6-7-8, 8-7-6-5"],
-            visualAid: positionAid("c-major-groups-four-source", C_MAJOR_POSITION, "PATTERN")
+            visualAid: positionAid("c-major-groups-four-source", C_MAJOR_POSITION, "PATTERN",
+                ["1","2","3","4","4","3","2","1","2","3","4","5","5","4","3","2"])
         })),
     preset("preset-pattern-three-per-string", "Three Notes Per String", "Scale Patterns",
         "A shifting, legato-friendly fingering with three notes on every string.",
@@ -262,7 +317,7 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 120, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Standard tuning. E Ionian from string 6 upward: 12-14-16 | 12-14-16 | 13-14-16 | 13-14-16 | 14-16-17 | 14-16-17; reverse to descend, one note per click.",
             pattern: ["exactly 3 notes on every string", "root E is string 6, fret 12"],
-            visualAid: threeNpsAid()
+            visualAid: threeNpsAid("sequence")
         })),
     preset("preset-pattern-string-skipping-scale", "String-Skipping Scale Pattern", "Scale Patterns",
         "Scale tones played out of order by skipping a string each time.",
@@ -271,7 +326,7 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "Standard tuning, A-minor-pentatonic Box 1. Strictly alternate-pick both notes on each named string, one note per click, and mute the skipped string.",
             pattern: ["↓↑ S6 5-8 → ↓↑ S4 5-7 → ↓↑ S2 5-8", "↓↑ S5 5-7 → ↓↑ S3 5-7 → ↓↑ S1 5-8"],
-            visualAid: boxAid(1)
+            visualAid: boxAid(1, ["↓S6f5","↑S6f8","↓S4f5","↑S4f7","↓S2f5","↑S2f8","↓S5f5","↑S5f7","↓S3f5","↑S3f7","↓S1f5","↑S1f8"])
         })),
 
     // ---------------------------------------------------------- Triads
@@ -377,7 +432,7 @@ var PRESET_ROUTINES = [
             startBpm: 70, targetBpm: 140, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "Standard tuning, E-minor-pentatonic Box 1. Play one note per eighth-note click, strictly down-up even across string changes.",
             pattern: ["↓ ↑ ↓ ↑ ↓ ↑ ↓ ↑"],
-            visualAid: boxAid(1)
+            visualAid: boxAid(1, ["↓","↑","↓","↑","↓","↑","↓","↑"])
         })),
     preset("preset-technique-economy-picking", "Economy Picking on E Major 3NPS", "Technique",
         "Three notes per string make the repeated sweep-direction string change explicit.",
@@ -386,7 +441,7 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "Standard tuning. Ascending, pick ↓↑↓ then use another ↓ through the adjacent higher string; descending, pick ↑↓↑ then another ↑ through the lower string. One note per click.",
             pattern: ["ascending: ↓ ↑ ↓ | ↓ ↑ ↓", "descending: ↑ ↓ ↑ | ↑ ↓ ↑"],
-            visualAid: threeNpsAid()
+            visualAid: threeNpsAid("economy")
         })),
     preset("preset-technique-legato", "Legato Hammer-On/Pull-Off Drill", "Technique",
         "Pick once, then hammer-on and pull-off for the rest of the phrase.",
@@ -395,7 +450,7 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 120, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             instructions: "On each string of the highlighted E-major 3NPS shape, pick the first note, hammer the next two, then pull off in reverse. Numbers are fingers, not scale degrees. Begin unmetered; when even, place one complete five-note slur on each click.",
             pattern: ["1 h 2 h 4 p 2 p 1", "adjust 1-2-4 to 1-3-4 where the fret spacing requires"],
-            visualAid: threeNpsAid()
+            visualAid: threeNpsAid("legato")
         })),
     preset("preset-technique-string-skipping", "String Skipping", "Technique",
         "Picking accuracy across non-adjacent strings.",
@@ -403,7 +458,8 @@ var PRESET_ROUTINES = [
             label: "String Skipping", key: null, durationMinutes: 5,
             startBpm: 60, targetBpm: 120, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "On one comfortably fretted note, alternate-pick string 6, then 4, then 2; reverse 2-4-6. Mute strings 5, 3 and 1.",
-            pattern: ["↓ S6 → ↑ S4 → ↓ S2", "↑ S2 → ↓ S4 → ↑ S6"]
+            pattern: ["↓ S6 → ↑ S4 → ↓ S2", "↑ S2 → ↓ S4 → ↑ S6"],
+            visualAid: pathAid("string-skipping-6-4-2", [[0,5],[2,5],[4,5]], ["↓ S6","↑ S4","↓ S2"], "PICKING_PATTERN")
         })),
     preset("preset-technique-palm-mute", "Palm-Muted Eighth Notes", "Technique",
         "Steady, even palm-muted eighths - a rock/metal rhythm staple.",
@@ -412,7 +468,7 @@ var PRESET_ROUTINES = [
             startBpm: 80, targetBpm: 140, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "Standard tuning, open E5 (strings 6-5-4: 0-2-2). Play one palm-muted stroke per eighth-note click near the bridge.",
             pattern: ["1 & 2 & 3 & 4 &", "↓ ↑ ↓ ↑ ↓ ↑ ↓ ↑ (all muted)"],
-            visualAid: chordAid([0, 2, 2, -1, -1, -1], "open-e5")
+            visualAid: chordAid([0, 2, 2, -1, -1, -1], "open-e5", ["↓","↑","↓","↑","↓","↑","↓","↑"])
         })),
     preset("preset-technique-accent-displacement", "Accent Displacement", "Technique",
         "Move a single accent through a steady eighth-note stream.",
@@ -420,15 +476,18 @@ var PRESET_ROUTINES = [
             label: "Accent Displacement", key: null, durationMinutes: 5,
             startBpm: 70, targetBpm: 120, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "Play one note per eighth-note click. For four bars each, accent only beat 1, then only the & of beat 2, then only beat 3; the app click still accents beat 1.",
-            pattern: [">1 & 2 & 3 & 4 &", "1 & 2 >& 3 & 4 &", "1 & 2 & >3 & 4 &"]
+            pattern: [">1 & 2 & 3 & 4 &", "1 & 2 >& 3 & 4 &", "1 & 2 & >3 & 4 &"],
+            visualAid: rhythmAid("accent-displacement",
+                ["1","&","2","&","3","&","4","&","1","&","2","&","3","&","4","&","1","&","2","&","3","&","4","&"],
+                [0,11,20], 8, [0,8,16])
         })),
 
     // ---------------------------------------------------------- Rhythm
     preset("preset-rhythm-subdivision-drill", "Quarter/Eighth Subdivision Drill", "Rhythm",
         "Feel the difference between quarter- and eighth-note subdivisions.",
         [
-            makeItem("subdiv-quarter", { type: "technique", label: "Quarter Notes", durationMinutes: 2, targetBpm: 90, metronome: { timeSignatureId: "4-4", subdivisionId: "quarter" }, notes: "Play one quarter note per click at 90 BPM.", pattern: ["1   2   3   4"] }),
-            makeItem("subdiv-eighth", { type: "technique", label: "Eighth Notes", durationMinutes: 2, targetBpm: 90, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "The click now sounds twice per beat; play one eighth note per click.", pattern: ["1 & 2 & 3 & 4 &"] })
+            makeItem("subdiv-quarter", { type: "technique", label: "Quarter Notes", durationMinutes: 2, targetBpm: 90, metronome: { timeSignatureId: "4-4", subdivisionId: "quarter" }, notes: "Play one quarter note per click at 90 BPM.", pattern: ["1   2   3   4"], visualAid: rhythmAid("quarter-notes", ["1","2","3","4"], [0], 4) }),
+            makeItem("subdiv-eighth", { type: "technique", label: "Eighth Notes", durationMinutes: 2, targetBpm: 90, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "The click now sounds twice per beat; play one eighth note per click.", pattern: ["1 & 2 & 3 & 4 &"], visualAid: rhythmAid("eighth-notes", ["1","&","2","&","3","&","4","&"], [0], 8) })
         ]),
     preset("preset-rhythm-triplets", "Triplets", "Rhythm",
         "Three evenly spaced notes within each quarter-note beat.",
@@ -436,7 +495,8 @@ var PRESET_ROUTINES = [
             label: "Triplets", key: null, durationMinutes: 5,
             startBpm: 70, targetBpm: 120, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "triplet",
             instructions: "The click sounds three times per quarter-note beat. Play one note per click and count 1-trip-let, 2-trip-let.",
-            pattern: ["1-trip-let 2-trip-let 3-trip-let 4-trip-let"]
+            pattern: ["1-trip-let 2-trip-let 3-trip-let 4-trip-let"],
+            visualAid: rhythmAid("quarter-note-triplets", ["1","trip","let","2","trip","let","3","trip","let","4","trip","let"], [0], 6, [0,3,6,9])
         })),
     preset("preset-rhythm-sixteenth", "Sixteenth Notes", "Rhythm",
         "Four evenly spaced notes within each quarter-note beat.",
@@ -444,7 +504,8 @@ var PRESET_ROUTINES = [
             label: "Sixteenth Notes", key: null, durationMinutes: 5,
             startBpm: 60, targetBpm: 100, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "sixteenth",
             instructions: "The click sounds four times per quarter-note beat. Play one note per click; count 1-e-&-a through 4-e-&-a.",
-            pattern: ["1 e & a 2 e & a 3 e & a 4 e & a"]
+            pattern: ["1 e & a 2 e & a 3 e & a 4 e & a"],
+            visualAid: rhythmAid("sixteenth-notes", ["1","e","&","a","2","e","&","a","3","e","&","a","4","e","&","a"], [0], 8, [0,4,8,12])
         })),
     preset("preset-rhythm-syncopation", "Eighth-Note Syncopation", "Rhythm",
         "Accent the off-beats to feel syncopation instead of a straight pulse.",
@@ -452,14 +513,15 @@ var PRESET_ROUTINES = [
             label: "Eighth-Note Syncopation", key: null, durationMinutes: 5,
             startBpm: 70, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120, subdivisionId: "eighth",
             instructions: "Play one note per eighth-note click; keep downbeats soft and accent every offbeat (&). The app click still accents beat 1.",
-            pattern: ["1 >& 2 >& 3 >& 4 >&"]
+            pattern: ["1 >& 2 >& 3 >& 4 >&"],
+            visualAid: rhythmAid("eighth-syncopation", ["1","&","2","&","3","&","4","&"], [1,3,5,7], 8)
         })),
     preset("preset-rhythm-accent-groups", "Accent Every 2 / 3 / 4 Notes", "Rhythm",
         "The same steady stream of notes, grouped by ear into 2s, then 3s, then 4s.",
         [
-            makeItem("accent-2", { type: "technique", label: "Accent Every 2nd Note", durationMinutes: 2, targetBpm: 100, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "One note per click; accent notes 2, 4, 6 and 8.", pattern: ["· > · > · > · >"] }),
-            makeItem("accent-3", { type: "technique", label: "Accent Every 3rd Note", durationMinutes: 2, targetBpm: 100, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "One note per click; accent every third note continuously, so accents cross the barline.", pattern: ["· · > · · > · · | > · · > …"] }),
-            makeItem("accent-4", { type: "technique", label: "Accent Every 4th Note", durationMinutes: 2, targetBpm: 100, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "One note per click; accent notes 4 and 8.", pattern: ["· · · > · · · >"] })
+            makeItem("accent-2", { type: "technique", label: "Accent Every 2nd Note", durationMinutes: 2, targetBpm: 100, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "One note per click; accent notes 2, 4, 6 and 8.", pattern: ["· > · > · > · >"], visualAid: rhythmAid("accent-every-2", ["1","2","3","4","5","6","7","8"], [1,3,5,7], 8) }),
+            makeItem("accent-3", { type: "technique", label: "Accent Every 3rd Note", durationMinutes: 2, targetBpm: 100, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "One note per click; accent every third note continuously, so accents cross the barline.", pattern: ["· · > · · > · · | > · · > …"], visualAid: rhythmAid("accent-every-3", ["1","2","3","4","5","6","7","8","1","2","3","4"], [2,5,8,11], 8) }),
+            makeItem("accent-4", { type: "technique", label: "Accent Every 4th Note", durationMinutes: 2, targetBpm: 100, metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" }, notes: "One note per click; accent notes 4 and 8.", pattern: ["· · · > · · · >"], visualAid: rhythmAid("accent-every-4", ["1","2","3","4","5","6","7","8"], [3,7], 8) })
         ]),
     preset("preset-rhythm-6-8-groove", "6/8 Groove Drill", "Rhythm",
         "A rolling compound-time feel: two big beats, each split into three.",
@@ -468,7 +530,8 @@ var PRESET_ROUTINES = [
             startBpm: 60, targetBpm: 110, incrementBpm: 5, incrementMode: "time", intervalSeconds: 120,
             timeSignatureId: "6-8", subdivisionId: "triplet",
             instructions: "BPM is the dotted-quarter pulse: two beats per bar. The click gives three written eighth notes per beat; play one note per click and accent notes 1 and 4. The app uses its stronger click on bar-start note 1 only.",
-            pattern: [">1 2 3  >4 5 6", "ONE-two-three FOUR-five-six"]
+            pattern: [">1 2 3  >4 5 6", "ONE-two-three FOUR-five-six"],
+            visualAid: rhythmAid("six-eight-two-dotted-quarter-beats", ["1","la","li","2","la","li"], [0,3], 6, [0,3])
         }))
 ]
 

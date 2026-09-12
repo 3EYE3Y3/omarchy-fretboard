@@ -2,6 +2,36 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.3.4] - 2026-09-13
+
+Position-highlight and practice-visual release. Marketplace preparation remains
+paused pending personal review.
+
+### Changed
+- Minor-pentatonic Box 1–5 selection now keeps the complete six-string 0–12 scale
+  map visible, strongly emphasizes verified box coordinates, dims other valid tones
+  and keeps all roots identifiable. Octave-equivalent forms are mapped into the
+  fixed reference range without inventing new positions.
+- Added exact major/minor/diminished/augmented triad Reference filters for root,
+  first and second inversion across four adjacent string sets. Alternate tunings
+  retain recalculated chord-tone context and suppress Standard-only shape claims.
+- Rebuilt Practice Sessions as a bounded master/detail browser: compact list rows
+  never expand on selection, only the list scrolls, and detail/visual/actions live in
+  a separate pane. The running view retains the same visual while controls remain
+  reachable.
+- All 40 built-in sessions (73 constituent items) now resolve to shared data-driven
+  visuals. Added path, picking-pattern and rhythm-grid semantics for the previously
+  text-only warmup, technique and rhythm items.
+
+### Added
+- Shared `PracticeVisual` and wrapping `SequenceGrid` renderers, plus a pure browser
+  projection model that regression-tests stable row/list state across selection.
+- Canonical tests for contextual Box 1–5 emphasis, roots, octave handling, triad
+  quality/inversion/string-set filters, visual-contract coverage, coordinate bounds,
+  rhythm/metronome agreement and 6/8 grouping.
+- A complete source-backed 40-preset visual/layout matrix in
+  `docs/PRACTICE_VISUAL_AUDIT.md`.
+
 ## [0.3.3] - 2026-09-12
 
 Scale-visualization correctness release. Marketplace preparation remains paused

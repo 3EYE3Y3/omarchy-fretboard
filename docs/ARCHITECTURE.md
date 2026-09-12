@@ -138,15 +138,23 @@ duplicatePreset`), which clears the `preset` flag, issues a fresh routine id and
 item ids, and appends the result to `routines` - the source object is untouched
 (verified by a test that diffs the preset's JSON before/after a duplicate call).
 
-## Visual semantics and shared components (v0.3.3)
+## Visual semantics and shared components (v0.3.4)
 
 Pitch-set membership and guitar fingering are different data. `js/visual_shapes.js`
 therefore gives every visual claim an explicit mode: `FULL_FRETBOARD_SCALE`,
 `POSITION`, `PENTATONIC_BOX`, `THREE_NOTES_PER_STRING`, `TRIAD_SHAPE`, `CHORD_SHAPE`,
-or `PATTERN`. Named shapes carry exact low-to-high string-index/fret coordinates and
+`PATTERN`, `FRETBOARD_PATH`, `RHYTHM_GRID` or `PICKING_PATTERN`. Named shapes carry exact low-to-high string-index/fret coordinates and
 a required tuning. A full-fretboard scale map is a separate open-to-fret-12 contract:
 every pitch-class match is calculated independently on all six strings from the
 active tuning. It is never presented as a Box, Position or 3NPS fingering.
+
+Reference selection adds a second dimension without changing membership:
+`highlighted` means a valid pitch-set member, while `isEmphasized` means the cell is
+part of the verified selected box or triad shape. `PracticeVisual.qml` routes every
+built-in item through shared fretboard, chord-diagram and wrapping sequence-grid
+components. `preset_browser.js` projects immutable compact list rows; selection is
+resolved separately into the master/detail preview and cannot alter row height or
+list membership.
 
 `panel/FretboardGrid.qml` renders either the complete pitch-class membership map or
 only those exact coordinates. `panel/ChordDiagram.qml` renders an audited shape from

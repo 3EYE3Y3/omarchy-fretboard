@@ -26,6 +26,9 @@ panel, instead of a pile of separate mini-apps.
 - 14 scale/mode entries (including explicit Ionian and Aeolian aliases), canonical
   formulas, practical key-aware spelling, and note names or interval labels across
   every matching tone on all six strings from the open strings through fret 12
+- Verified A-minor-pentatonic Box 1–5 filters retain that complete map while strongly
+  emphasizing the selected box; verified major/minor/diminished/augmented triad
+  inversion and adjacent-string-set filters use the same stable 0–12 view
 - 11 chord families with audited open and movable E-root/A-root shapes in Standard
   tuning; alternate tunings retain accurate chord-tone maps but deliberately do not
   claim that Standard-tuning shapes still apply
@@ -37,7 +40,8 @@ panel, instead of a pile of separate mini-apps.
 - Routines is a first-class Practice tab (second, right beside Metronome) with two
   parts: **Practice Sessions**, a curated bank of 40 built-in presets across 7
   categories (Warmups, Scales, Scale Patterns, Triads, Chords, Technique, Rhythm) that
-  you can browse, preview, start immediately, or duplicate into an editable routine
+  you can browse in a bounded compact list, preview in a separate detail pane, start
+  immediately, or duplicate into an editable routine
   without ever touching the built-in template; and **My Routines**, your own saved
   routines built from warmup/scales/chord-change/technique/song/free practice/
   ear-training/custom blocks, with reorder, duplicate, and "start entire routine"
@@ -45,7 +49,7 @@ panel, instead of a pile of separate mini-apps.
   fretboard, the
   metronome or tempo trainer, and the timer for you, and shows a visual aid alongside
   it — either a six-string, open-to-fret-12 pitch-membership map or an explicit data-driven
-  position/box/3NPS/triad/chord/pattern shape (with roots distinct, interval-label
+  position/box/3NPS/triad/chord/pattern/path/picking/rhythm visual (with roots distinct, interval-label
   toggle, fret numbers and string names), plus the written sequence and picking
   directions where applicable — alongside pause/resume, metronome mute and BPM
   adjustment, all without leaving the routine

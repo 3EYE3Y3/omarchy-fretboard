@@ -46,7 +46,7 @@ Item {
         }
     }
 
-    // ------------------------------------------------------------ fretboard + scale/chord
+    // ------------------------------------------------------------ fretboard + scale/triad/chord
     Component {
         id: fretboardView
         ColumnLayout {
@@ -79,13 +79,14 @@ Item {
 
             ButtonGroup {
                 Layout.fillWidth: true
-                options: [{ value: "scale", label: "Scale" }, { value: "chord", label: "Chord" }]
+                options: [{ value: "scale", label: "Scale" }, { value: "triad", label: "Triad" }, { value: "chord", label: "Chord" }]
                 value: root.service ? root.service.referenceMode : "scale"
                 foreground: Color.foreground
                 accent: Color.accent
                 onChanged: function (value) {
                     if (!root.service) return
                     if (value === "chord") root.service.setReferenceChord(root.service.referenceChordId)
+                    else if (value === "triad") root.service.setReferenceTriad(root.service.referenceTriadQuality)
                     else root.service.setReferenceScale(root.service.referenceScaleId)
                 }
             }
@@ -98,11 +99,86 @@ Item {
                 onChanged: function (value) { if (root.service) root.service.setReferenceScale(value) }
             }
             Dropdown {
+                visible: root.service ? root.service.referenceMode === "triad" : false
+                label: "Triad quality"
+                options: [
+                    { value: "major", label: "Major" }, { value: "minor", label: "Minor" },
+                    { value: "diminished", label: "Diminished" }, { value: "augmented", label: "Augmented" }
+                ]
+                value: root.service ? root.service.referenceTriadQuality : "major"
+                onChanged: function (value) { if (root.service) root.service.setReferenceTriad(value) }
+            }
+            Dropdown {
                 visible: root.service ? root.service.referenceMode === "chord" : false
                 label: "Chord"
                 options: Theory.CHORDS.map(function (c) { return { value: c.id, label: c.name } })
                 value: root.service ? root.service.referenceChordId : "major"
                 onChanged: function (value) { if (root.service) root.service.setReferenceChord(value) }
+            }
+
+            ButtonGroup {
+                visible: root.service ? root.service.referenceMode === "scale" && root.service.referenceScaleId === "minor_pentatonic" : false
+                Layout.fillWidth: true
+                options: [
+                    { value: "all", label: "All" }, { value: "1", label: "Box 1" },
+                    { value: "2", label: "Box 2" }, { value: "3", label: "Box 3" },
+                    { value: "4", label: "Box 4" }, { value: "5", label: "Box 5" }
+                ]
+                value: root.service ? root.service.referenceScalePosition : "all"
+                foreground: Color.foreground
+                accent: Color.accent
+                onChanged: function (value) { if (root.service) root.service.setReferenceScalePosition(value) }
+            }
+
+            ButtonGroup {
+                visible: root.service ? root.service.referenceMode === "triad" : false
+                Layout.fillWidth: true
+                options: [
+                    { value: "all", label: "All" }, { value: "root", label: "Root" },
+                    { value: "first", label: "1st Inv" }, { value: "second", label: "2nd Inv" }
+                ]
+                value: root.service ? root.service.referenceTriadInversion : "all"
+                foreground: Color.foreground
+                accent: Color.accent
+                onChanged: function (value) { if (root.service) root.service.setReferenceTriadInversion(value) }
+            }
+
+            ButtonGroup {
+                visible: root.service ? root.service.referenceMode === "triad" : false
+                Layout.fillWidth: true
+                options: [
+                    { value: "all", label: "All sets" }, { value: "123", label: "1-2-3" },
+                    { value: "234", label: "2-3-4" }, { value: "345", label: "3-4-5" },
+                    { value: "456", label: "4-5-6" }
+                ]
+                value: root.service ? root.service.referenceTriadStringSet : "all"
+                foreground: Color.foreground
+                accent: Color.accent
+                onChanged: function (value) { if (root.service) root.service.setReferenceTriadStringSet(value) }
+            }
+
+            Text {
+                visible: root.service ? root.service.referenceMode === "triad" && root.service.selectedTuningId !== "standard" : false
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Exact named triad shapes are verified for Standard tuning. Chord tones remain recalculated for this tuning, without a misleading shape highlight."
+                color: Color.foreground
+                opacity: 0.62
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
+            }
+            Text {
+                visible: root.service ? root.service.referenceMode === "scale"
+                    && root.service.referenceScaleId === "minor_pentatonic"
+                    && root.service.referenceScalePosition !== "all"
+                    && root.service.selectedTuningId !== "standard" : false
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: "Named pentatonic boxes are verified for Standard tuning. The complete scale map is recalculated for this tuning without a misleading box highlight."
+                color: Color.foreground
+                opacity: 0.62
+                font.family: Style.font.family
+                font.pixelSize: Style.font.caption
             }
 
             RowLayout {
@@ -133,8 +209,10 @@ Item {
                 stringLabels: root.stringLabels()
                 showIntervals: root.service ? root.service.showIntervals : false
                 toneData: root.currentTones()
-                startFret: root.service && root.service.referenceMode === "scale" ? VisualShapes.FULL_FRETBOARD_START_FRET : 0
-                endFret: root.service && root.service.referenceMode === "scale" ? VisualShapes.FULL_FRETBOARD_END_FRET : -1
+                startFret: VisualShapes.FULL_FRETBOARD_START_FRET
+                endFret: root.service && root.service.referenceMode === "chord"
+                    ? -1 : VisualShapes.FULL_FRETBOARD_END_FRET
+                allowScroll: root.service ? root.service.referenceMode === "chord" : false
             }
 
             ColumnLayout {

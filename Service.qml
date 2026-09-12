@@ -460,7 +460,11 @@ Item {
     property string referenceKey: "C"
     property string referenceScaleId: "major"
     property string referenceChordId: "major"
-    property string referenceMode: "scale" // "scale" | "chord"
+    property string referenceMode: "scale" // "scale" | "triad" | "chord"
+    property string referenceScalePosition: "all"
+    property string referenceTriadQuality: "major"
+    property string referenceTriadInversion: "all"
+    property string referenceTriadStringSet: "all"
     property bool showIntervals: false
     property int fretCount: 24
 
@@ -489,12 +493,29 @@ Item {
     }
 
     function setReferenceKey(key) { referenceKey = key }
-    function setReferenceScale(id) { referenceMode = "scale"; referenceScaleId = id }
+    function setReferenceScale(id) {
+        referenceMode = "scale"
+        referenceScaleId = id
+        if (id !== "minor_pentatonic") referenceScalePosition = "all"
+    }
+    function setReferenceScalePosition(value) { referenceScalePosition = value }
+    function setReferenceTriad(quality) { referenceMode = "triad"; referenceTriadQuality = quality }
+    function setReferenceTriadInversion(value) { referenceTriadInversion = value }
+    function setReferenceTriadStringSet(value) { referenceTriadStringSet = value }
     function setReferenceChord(id) { referenceMode = "chord"; referenceChordId = id }
 
     function currentToneData() {
         if (referenceMode === "chord") return Theory.buildChord(referenceKey, referenceChordId)
+        if (referenceMode === "triad") return Theory.buildChord(referenceKey, referenceTriadQuality)
         return Theory.buildScale(referenceKey, referenceScaleId)
+    }
+
+    function currentTriadShapes() {
+        if (referenceMode !== "triad" || selectedTuningId !== "standard") return []
+        var tones = currentToneData()
+        return tones ? VisualShapes.triadShapes(tones.rootPitchClass, referenceTriadQuality,
+            referenceTriadInversion, referenceTriadStringSet,
+            VisualShapes.FULL_FRETBOARD_START_FRET, VisualShapes.FULL_FRETBOARD_END_FRET) : []
     }
 
     function currentFretboard() {
@@ -503,6 +524,17 @@ Item {
         var tones = currentToneData()
         if (!tones) return board
         var set = Theory.pitchClassSet(tones.notes)
+        if (referenceMode === "scale" && referenceScaleId === "minor_pentatonic"
+                && referenceScalePosition !== "all" && selectedTuningId === "standard") {
+            var aid = { mode: VisualShapes.PENTATONIC_BOX, box: Number(referenceScalePosition), tuningId: "standard" }
+            var positions = VisualShapes.positionsInRange(aid, tones.rootPitchClass,
+                VisualShapes.FULL_FRETBOARD_START_FRET, VisualShapes.FULL_FRETBOARD_END_FRET)
+            return VisualShapes.highlightContext(board, set, tones.rootPitchClass, positions, [])
+        }
+        if (referenceMode === "triad") {
+            return VisualShapes.highlightContext(board, set, tones.rootPitchClass,
+                VisualShapes.flattenShapePositions(currentTriadShapes()), [])
+        }
         return Fretboard.highlightFretboard(board, set, tones.rootPitchClass)
     }
 
@@ -627,21 +659,31 @@ Item {
         return Routines.nextItem(activeRoutine, activeRun)
     }
 
+    function activeToneData() {
+        var item = activeItem()
+        if (!item) return null
+        if (item.scaleKey) return Theory.buildScale(item.scaleKey.key, item.scaleKey.scaleId)
+        if (item.chordKey) return Theory.buildChord(item.chordKey.key, item.chordKey.chordId)
+        return null
+    }
+
     // General scales use the complete open-to-octave reference range. Exact
     // positional modes derive their window from their canonical coordinates.
     // The density helper remains only as a legacy fallback for unclassified
     // chord material; it must never turn a plain scale into a fake position.
     function activeItemFretWindow() {
         var item = activeItem()
-        if (!item || (!item.scaleKey && !item.chordKey)) return null
+        if (!item) return null
+        if (item.scaleKey && item.visualAid && (item.visualAid.mode === VisualShapes.POSITION
+                || item.visualAid.mode === VisualShapes.PENTATONIC_BOX)) return VisualShapes.fullFretboardWindow()
         if (item.visualAid) {
-            var visualWindow = VisualShapes.fretWindow(item.visualAid, currentToneData() ? currentToneData().rootPitchClass : 0)
+            var visualWindow = VisualShapes.fretWindow(item.visualAid, activeToneData() ? activeToneData().rootPitchClass : 0)
             if (visualWindow) return visualWindow
             if (item.visualAid.mode === VisualShapes.CHORD_SHAPE) return null
         }
         if (item.fretWindow) return { startFret: item.fretWindow[0], endFret: item.fretWindow[1] }
         if (item.scaleKey) return VisualShapes.fullFretboardWindow()
-        var tones = currentToneData()
+        var tones = activeToneData()
         if (!tones) return null
         return Fretboard.findPositionWindow(currentTuning().notes, Theory.pitchClassSet(tones.notes), fretCount, 5)
     }
@@ -649,17 +691,31 @@ Item {
     function activeVisualBoard() {
         var item = activeItem()
         var tones = currentToneData()
-        if (!item || (!item.scaleKey && !item.chordKey) || !tones) return null
+        if (!item) return null
         var board = Fretboard.buildFretboard(currentTuning().notes, fretCount)
+        if (item.visualAid && (item.visualAid.mode === VisualShapes.FRETBOARD_PATH
+                || item.visualAid.mode === VisualShapes.PICKING_PATTERN))
+            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, 0), -1, item.visualAid.sequence || [])
+        if ((!item.scaleKey && !item.chordKey) || !tones) return null
+        if (item.visualAid && item.scaleKey && (item.visualAid.mode === VisualShapes.POSITION
+                || item.visualAid.mode === VisualShapes.PENTATONIC_BOX)) {
+            var positions = VisualShapes.positionsInRange(item.visualAid, tones.rootPitchClass,
+                VisualShapes.FULL_FRETBOARD_START_FRET, VisualShapes.FULL_FRETBOARD_END_FRET)
+            return VisualShapes.highlightContext(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass,
+                positions, item.visualAid.sequence || [])
+        }
         if (item.visualAid && item.visualAid.mode !== VisualShapes.FULL_FRETBOARD_SCALE) {
-            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, tones.rootPitchClass), tones.rootPitchClass)
+            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, tones.rootPitchClass), tones.rootPitchClass, item.visualAid.sequence || [])
         }
         return Fretboard.highlightFretboard(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass)
     }
 
     function activeItemShowsFretboard() {
         var item = activeItem()
-        return !!(item && (item.scaleKey || item.chordKey) && currentToneData()
+        if (!item) return false
+        if (item.visualAid && (item.visualAid.mode === VisualShapes.FRETBOARD_PATH
+                || item.visualAid.mode === VisualShapes.PICKING_PATTERN)) return !!item.visualAid.positions
+        return !!((item.scaleKey || item.chordKey) && activeToneData()
             && (!item.visualAid || item.visualAid.mode !== VisualShapes.CHORD_SHAPE))
     }
 

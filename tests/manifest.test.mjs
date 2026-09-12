@@ -11,8 +11,8 @@ test("manifest declares schema version 1", () => {
   assert.equal(manifest.schemaVersion, 1)
 })
 
-test("release metadata agrees on v0.3.3", () => {
-  assert.equal(manifest.version, "0.3.3")
+test("release metadata agrees on v0.3.4", () => {
+  assert.equal(manifest.version, "0.3.4")
   assert.equal(packageJson.version, manifest.version)
 })
 

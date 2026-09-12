@@ -10,6 +10,9 @@ var THREE_NOTES_PER_STRING = "THREE_NOTES_PER_STRING"
 var TRIAD_SHAPE = "TRIAD_SHAPE"
 var CHORD_SHAPE = "CHORD_SHAPE"
 var PATTERN = "PATTERN"
+var FRETBOARD_PATH = "FRETBOARD_PATH"
+var RHYTHM_GRID = "RHYTHM_GRID"
+var PICKING_PATTERN = "PICKING_PATTERN"
 
 // General scale/mode references deliberately show a complete octave of the
 // neck, including open strings and the octave repeat at fret 12.  This range
@@ -18,7 +21,8 @@ var FULL_FRETBOARD_START_FRET = 0
 var FULL_FRETBOARD_END_FRET = 12
 
 var MODES = [FULL_FRETBOARD_SCALE, POSITION, PENTATONIC_BOX,
-             THREE_NOTES_PER_STRING, TRIAD_SHAPE, CHORD_SHAPE, PATTERN]
+             THREE_NOTES_PER_STRING, TRIAD_SHAPE, CHORD_SHAPE, PATTERN,
+             FRETBOARD_PATH, RHYTHM_GRID, PICKING_PATTERN]
 
 // Conventional minor-pentatonic boxes relative to the root on string 6.
 // Box 5 is kept just below Box 1, so A minor appears at frets 2-5.
@@ -66,6 +70,26 @@ function positionsFor(aid, rootPitchClass) {
     return []
 }
 
+// Return the octave-equivalent occurrence of a verified shape inside a fixed
+// reference range. A single octave shift is preferred so the fingering stays
+// visually contiguous. When a shape straddles fret 12 (A-minor Box 3), only
+// the above-range coordinates wrap; the pitch/string identity is unchanged.
+function positionsInRange(aid, rootPitchClass, startFret, endFret) {
+    var positions = positionsFor(aid, rootPitchClass)
+    if (!positions.length) return []
+    var shifts = [0, -12, 12, -24, 24]
+    for (var i = 0; i < shifts.length; i++) {
+        var shifted = positions.map(function (p) { return [p[0], p[1] + shifts[i]] })
+        if (shifted.every(function (p) { return p[1] >= startFret && p[1] <= endFret })) return shifted
+    }
+    return positions.map(function (p) {
+        var fret = p[1]
+        while (fret < startFret) fret += 12
+        while (fret > endFret) fret -= 12
+        return [p[0], fret]
+    })
+}
+
 function fretWindow(aid, rootPitchClass) {
     if (!aid || aid.mode === CHORD_SHAPE) return null
     if (aid.mode === FULL_FRETBOARD_SCALE) return fullFretboardWindow()
@@ -88,9 +112,16 @@ function supportsTuning(aid, tuningId) {
     return !aid || !aid.tuningId || aid.tuningId === tuningId
 }
 
-function highlightPositions(fretboard, positions, rootPitchClass) {
+function highlightPositions(fretboard, positions, rootPitchClass, sequence) {
     var selected = {}
+    var order = {}
     for (var i = 0; i < positions.length; i++) selected[positions[i][0] + ":" + positions[i][1]] = true
+    var path = sequence || []
+    for (var q = 0; q < path.length; q++) {
+        var step = path[q]
+        var key = Array.isArray(step) ? step[0] + ":" + step[1] : step.string + ":" + step.fret
+        if (order[key] === undefined) order[key] = step.label || q + 1
+    }
     var strings = []
     for (var s = 0; s < fretboard.strings.length; s++) {
         var row = []
@@ -98,9 +129,96 @@ function highlightPositions(fretboard, positions, rootPitchClass) {
             var cell = fretboard.strings[s][f]
             var highlighted = !!selected[s + ":" + cell.fret]
             row.push({ pitchClass: cell.pitchClass, octave: cell.octave, name: cell.name, fret: cell.fret,
-                highlighted: highlighted, isRoot: highlighted && cell.pitchClass === rootPitchClass })
+                highlighted: highlighted, isRoot: highlighted && cell.pitchClass === rootPitchClass,
+                sequenceIndex: order[s + ":" + cell.fret] || 0 })
         }
         strings.push(row)
     }
     return { fretCount: fretboard.fretCount, strings: strings }
+}
+
+// Keep every legitimate scale/chord tone visible while marking a verified
+// subset as the teaching focus. `isEmphasized` is deliberately independent
+// from `highlighted`: the selected box/triad never becomes a fake scale map.
+function highlightContext(fretboard, pitchClassSet, rootPitchClass, positions, sequence) {
+    var selected = {}
+    var order = {}
+    for (var i = 0; i < positions.length; i++) selected[positions[i][0] + ":" + positions[i][1]] = true
+    var path = sequence || []
+    for (var q = 0; q < path.length; q++) {
+        var step = path[q]
+        var key = Array.isArray(step) ? step[0] + ":" + step[1] : step.string + ":" + step.fret
+        if (order[key] === undefined) order[key] = step.label || q + 1
+    }
+    var strings = []
+    for (var s = 0; s < fretboard.strings.length; s++) {
+        var row = []
+        for (var f = 0; f < fretboard.strings[s].length; f++) {
+            var cell = fretboard.strings[s][f]
+            var key = s + ":" + cell.fret
+            var highlighted = !!pitchClassSet[cell.pitchClass]
+            row.push({ pitchClass: cell.pitchClass, octave: cell.octave, name: cell.name, fret: cell.fret,
+                highlighted: highlighted, isRoot: highlighted && cell.pitchClass === rootPitchClass,
+                isEmphasized: !!selected[key], sequenceIndex: order[key] || 0 })
+        }
+        strings.push(row)
+    }
+    return { fretCount: fretboard.fretCount, strings: strings }
+}
+
+var TRIAD_INTERVALS = {
+    major: [0, 4, 7], minor: [0, 3, 7], diminished: [0, 3, 6], augmented: [0, 4, 8]
+}
+var TRIAD_STRING_SETS = {
+    "123": [3, 4, 5], "234": [2, 3, 4], "345": [1, 2, 3], "456": [0, 1, 2]
+}
+var STANDARD_OPEN_MIDI = [40, 45, 50, 55, 59, 64]
+
+function inversionOrder(quality, inversion) {
+    var source = TRIAD_INTERVALS[quality]
+    if (!source) return []
+    if (inversion === "first") return [source[1], source[2], 12]
+    if (inversion === "second") return [source[2], 12, source[1] + 12]
+    return source.slice()
+}
+
+// Enumerate closed-position triads from interval order and the actual absolute
+// pitches of standard tuning. This is deterministic voice-order matching, not
+// a pitch-density heuristic: each result has the selected chord member in the
+// bass and the remaining members in the exact named inversion order.
+function triadShapes(rootPitchClass, quality, inversion, stringSet, startFret, endFret) {
+    var inversions = inversion && inversion !== "all" ? [inversion] : ["root", "first", "second"]
+    var setIds = stringSet && stringSet !== "all" ? [stringSet] : ["123", "234", "345", "456"]
+    var shapes = []
+    for (var si = 0; si < setIds.length; si++) {
+        var strings = TRIAD_STRING_SETS[setIds[si]]
+        if (!strings) continue
+        for (var ii = 0; ii < inversions.length; ii++) {
+            var order = inversionOrder(quality, inversions[ii])
+            for (var base = 24 + rootPitchClass; base <= 84 + rootPitchClass; base += 12) {
+                var positions = []
+                var valid = true
+                for (var v = 0; v < 3; v++) {
+                    var fret = base + order[v] - STANDARD_OPEN_MIDI[strings[v]]
+                    if (fret < startFret || fret > endFret) { valid = false; break }
+                    positions.push([strings[v], fret])
+                }
+                if (valid) shapes.push({ quality: quality, inversion: inversions[ii], stringSet: setIds[si], positions: positions })
+            }
+        }
+    }
+    return shapes
+}
+
+function flattenShapePositions(shapes) {
+    var seen = {}
+    var result = []
+    for (var i = 0; i < shapes.length; i++) {
+        for (var j = 0; j < shapes[i].positions.length; j++) {
+            var p = shapes[i].positions[j]
+            var key = p[0] + ":" + p[1]
+            if (!seen[key]) { seen[key] = true; result.push(p) }
+        }
+    }
+    return result
 }

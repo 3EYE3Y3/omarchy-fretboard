@@ -11,12 +11,16 @@ import "../js/fretboard.js" as Fretboard
 import "../js/visual_shapes.js" as VisualShapes
 import "../js/chord_voicings.js" as Voicings
 import "../js/tunings.js" as Tunings
+import "../js/preset_browser.js" as PresetBrowser
 
 Item {
     id: root
     property var service: null
     property var bar: null
     property string mode: "metronome" // metronome | routines | trainer | timer
+    property string initialPresetId: "" // deterministic deep-link/test selection; rows remain unchanged
+    property string initialCategory: "All"
+    property string browserSelection: initialPresetId
 
     implicitHeight: layout.implicitHeight
     Layout.fillWidth: true
@@ -370,11 +374,20 @@ Item {
     function previewBoard(item) {
         if (!root.service) return null
         var tones = previewToneData(item)
-        if (!tones) return null
         var tuning = root.previewTuning(item)
         var board = Fretboard.buildFretboard(tuning.notes, root.service.fretCount)
+        if (!tones && item && item.visualAid && (item.visualAid.mode === VisualShapes.FRETBOARD_PATH
+                || item.visualAid.mode === VisualShapes.PICKING_PATTERN))
+            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, 0), -1, item.visualAid.sequence || [])
+        if (!tones) return null
+        if (item.visualAid && (item.visualAid.mode === VisualShapes.POSITION || item.visualAid.mode === VisualShapes.PENTATONIC_BOX)) {
+            var positions = VisualShapes.positionsInRange(item.visualAid, tones.rootPitchClass,
+                VisualShapes.FULL_FRETBOARD_START_FRET, VisualShapes.FULL_FRETBOARD_END_FRET)
+            return VisualShapes.highlightContext(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass,
+                positions, item.visualAid.sequence || [])
+        }
         if (item.visualAid && item.visualAid.mode !== VisualShapes.FULL_FRETBOARD_SCALE)
-            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, tones.rootPitchClass), tones.rootPitchClass)
+            return VisualShapes.highlightPositions(board, VisualShapes.positionsFor(item.visualAid, tones.rootPitchClass), tones.rootPitchClass, item.visualAid.sequence || [])
         return Fretboard.highlightFretboard(board, Theory.pitchClassSet(tones.notes), tones.rootPitchClass)
     }
 
@@ -393,6 +406,8 @@ Item {
 
     function previewFretWindow(item) {
         if (!root.service || !item) return null
+        if (item.scaleKey && item.visualAid && (item.visualAid.mode === VisualShapes.POSITION
+                || item.visualAid.mode === VisualShapes.PENTATONIC_BOX)) return VisualShapes.fullFretboardWindow()
         if (item.visualAid) {
             var tonesForAid = previewToneData(item)
             var visualWindow = VisualShapes.fretWindow(item.visualAid, tonesForAid ? tonesForAid.rootPitchClass : 0)
@@ -412,7 +427,10 @@ Item {
     }
 
     function previewShowsFretboard(item) {
-        return !!previewToneData(item) && (!item.visualAid || item.visualAid.mode !== VisualShapes.CHORD_SHAPE)
+        if (!item || !item.visualAid) return !!previewToneData(item)
+        if (item.visualAid.mode === VisualShapes.FRETBOARD_PATH || item.visualAid.mode === VisualShapes.PICKING_PATTERN)
+            return !!item.visualAid.positions
+        return !!previewToneData(item) && item.visualAid.mode !== VisualShapes.CHORD_SHAPE
     }
 
     function previewShowsChordDiagram(item) {
@@ -438,7 +456,6 @@ Item {
             width: layout.width
             spacing: Style.spacing.md
             property string subMode: "presets" // presets | mine
-            property string selectedPresetId: ""
 
             // ---- running panel: shown prominently whenever a routine is active ----
             ColumnLayout {
@@ -479,44 +496,19 @@ Item {
                     font.pixelSize: Style.font.body
                 }
 
-                // Pattern/sequence text, when the item has one.
-                ColumnLayout {
-                    visible: root.service && root.service.activeItem() && root.service.activeItem().pattern
-                    spacing: Style.spacing.xxs
-                    Repeater {
-                        model: root.service && root.service.activeItem() && root.service.activeItem().pattern ? root.service.activeItem().pattern : []
-                        delegate: Text {
-                            required property string modelData
-                            text: "•  " + modelData
-                            color: Color.foreground
-                            opacity: 0.85
-                            font.family: Style.font.family
-                            font.pixelSize: Style.font.caption
-                        }
-                    }
-                }
-
-                // Visual aid: whatever the current item is actually about.
-                FretboardGrid {
-                    visible: root.service ? root.service.activeItemShowsFretboard() : false
+                // The same data-driven teaching visual used in the browser is
+                // retained while the player is holding the guitar.
+                PracticeVisual {
                     Layout.fillWidth: true
+                    item: root.service ? root.service.activeItem() : null
                     board: root.service ? root.service.activeVisualBoard() : null
                     stringLabels: root.stringLabelsFor(root.service)
                     showIntervals: root.service ? root.service.showIntervals : false
-                    toneData: root.service ? root.service.currentToneData() : null
-                    startFret: root.service && root.service.activeItemFretWindow() ? root.service.activeItemFretWindow().startFret : 0
-                    endFret: root.service && root.service.activeItemFretWindow() ? root.service.activeItemFretWindow().endFret : -1
-                }
-                RowLayout {
-                    visible: root.service ? root.service.activeItemChordVoicings().length > 0 : false
-                    spacing: Style.spacing.lg
-                    Repeater {
-                        model: root.service ? root.service.activeItemChordVoicings() : []
-                        delegate: ChordDiagram {
-                            required property var modelData
-                            voicing: modelData
-                        }
-                    }
+                    toneData: root.service ? root.service.activeToneData() : null
+                    voicings: root.service ? root.service.activeItemChordVoicings() : []
+                    fretWindow: root.service ? root.service.activeItemFretWindow() : null
+                    showFretboard: root.service ? root.service.activeItemShowsFretboard() : false
+                    showChord: root.service ? root.service.activeItemChordVoicings().length > 0 : false
                 }
 
                 RowLayout {
@@ -597,6 +589,7 @@ Item {
             }
 
             ButtonGroup {
+                visible: root.service ? !root.service.activeRoutine : true
                 Layout.fillWidth: true
                 options: [{ value: "presets", label: "Practice Sessions" }, { value: "mine", label: "My Routines" }]
                 value: routinesRoot.subMode
@@ -606,6 +599,7 @@ Item {
             }
 
             Loader {
+                visible: root.service ? !root.service.activeRoutine : true
                 Layout.fillWidth: true
                 sourceComponent: routinesRoot.subMode === "mine" ? myRoutinesView : presetsView
             }
@@ -614,11 +608,16 @@ Item {
             Component {
                 id: presetsView
                 ColumnLayout {
+                    id: browser
                     width: layout.width
                     spacing: Style.spacing.md
-                    property string category: "All"
+                    property string category: root.initialCategory
+                    readonly property var allPresets: root.service ? root.service.allPresets() : []
+                    readonly property var chosen: PresetBrowser.selectedPreset(allPresets, category, root.browserSelection)
+                    readonly property bool narrow: width < Style.space(650)
 
                     ButtonGroup {
+                        visible: !browser.narrow
                         Layout.fillWidth: true
                         options: ["All"].concat(root.service ? root.service.presetCategories() : [])
                         value: category
@@ -626,116 +625,167 @@ Item {
                         accent: Color.accent
                         onChanged: function (value) { category = value }
                     }
-
-                    ColumnLayout {
+                    Dropdown {
+                        visible: browser.narrow
                         Layout.fillWidth: true
-                        spacing: Style.spacing.xs
-                        Repeater {
-                            model: {
-                                var all = root.service ? root.service.allPresets() : []
-                                return category === "All" ? all : all.filter(function (p) { return p.category === category })
-                            }
-                            delegate: ColumnLayout {
-                                required property var modelData
-                                Layout.fillWidth: true
-                                spacing: Style.spacing.xxs
+                        label: "Category"
+                        options: ["All"].concat(root.service ? root.service.presetCategories() : [])
+                        value: browser.category
+                        onChanged: function (value) { browser.category = value }
+                    }
 
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: browser.narrow ? 1 : 2
+                        columnSpacing: Style.spacing.md
+                        rowSpacing: Style.spacing.sm
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: browser.narrow ? browser.width : Style.space(275)
+                            Layout.preferredHeight: browser.narrow ? Style.space(90) : Style.space(410)
+                            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.045)
+                            radius: Style.space(6)
+                            clip: true
+
+                            Flickable {
+                                id: presetList
+                                anchors.fill: parent
+                                anchors.margins: Style.space(5)
+                                contentWidth: width
+                                contentHeight: presetListColumn.height
+                                clip: true
+                                boundsBehavior: Flickable.StopAtBounds
+
+                                Column {
+                                    id: presetListColumn
+                                    width: presetList.width - (presetList.contentHeight > presetList.height ? Style.space(8) : 0)
+                                    spacing: Style.spacing.xxs
+                                    Repeater {
+                                        model: PresetBrowser.compactRows(browser.allPresets, browser.category,
+                                            browser.chosen ? browser.chosen.id : "")
+                                        delegate: Button {
+                                            required property var modelData
+                                            width: presetListColumn.width
+                                            height: Style.space(48)
+                                            focusable: true
+                                            leftAlign: true
+                                            text: modelData.name + "\n" + modelData.category + " · "
+                                                + modelData.durationMinutes + " min"
+                                                + (modelData.bpm ? " · " + modelData.bpm + " BPM" : "")
+                                                + " · " + modelData.visualLabel
+                                            selected: modelData.selected
+                                            foreground: Color.foreground
+                                            accent: Color.accent
+                                            onClicked: root.browserSelection = modelData.id
+                                        }
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: presetList.contentHeight > presetList.height
+                                    anchors.right: parent.right
+                                    width: Style.space(3)
+                                    radius: width / 2
+                                    color: Color.accent
+                                    opacity: 0.55
+                                    height: Math.max(Style.space(22), parent.height * parent.height / parent.contentHeight)
+                                    y: parent.contentY * (parent.height - height) / Math.max(1, parent.contentHeight - parent.height)
+                                }
+                            }
+                        }
+
+                        Rectangle {
+                            Layout.fillWidth: true
+                            Layout.fillHeight: true
+                            Layout.preferredWidth: browser.narrow ? browser.width : Style.space(485)
+                            Layout.preferredHeight: browser.narrow ? Style.space(350) : Style.space(410)
+                            color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.025)
+                            radius: Style.space(6)
+                            clip: true
+
+                            ColumnLayout {
+                                id: detailColumn
+                                anchors.fill: parent
+                                anchors.margins: Style.space(10)
+                                spacing: Style.spacing.xs
+                                readonly property var selectedItem: browser.chosen && browser.chosen.items.length ? browser.chosen.items[0] : null
+
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: browser.chosen ? browser.chosen.name : "No practice session"
+                                    color: Color.foreground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.heading
+                                    font.bold: true
+                                    elide: Text.ElideRight
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    text: browser.chosen ? browser.chosen.description : ""
+                                    color: Color.foreground
+                                    opacity: 0.76
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 3
+                                    elide: Text.ElideRight
+                                    text: detailColumn.selectedItem ? detailColumn.selectedItem.notes : ""
+                                    color: Color.foreground
+                                    opacity: 0.62
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                }
+                                Text {
+                                    visible: browser.chosen ? browser.chosen.items.length > 1 : false
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 2
+                                    elide: Text.ElideRight
+                                    text: browser.chosen ? "Sequence: " + browser.chosen.items.map(function (i) { return i.label }).join(" → ") : ""
+                                    color: Color.foreground
+                                    opacity: 0.58
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                }
+                                PracticeVisual {
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    item: detailColumn.selectedItem
+                                    board: root.previewBoard(detailColumn.selectedItem)
+                                    stringLabels: root.previewStringLabels(detailColumn.selectedItem)
+                                    toneData: root.previewToneData(detailColumn.selectedItem)
+                                    voicings: root.previewVoicings(detailColumn.selectedItem)
+                                    fretWindow: root.previewFretWindow(detailColumn.selectedItem)
+                                    showFretboard: root.previewShowsFretboard(detailColumn.selectedItem)
+                                    showChord: root.previewShowsChordDiagram(detailColumn.selectedItem)
+                                }
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: Style.spacing.sm
-                                    Button {
-                                        focusable: true
-                                        text: modelData.name
-                                        leftAlign: true
-                                        Layout.fillWidth: true
-                                        foreground: Color.foreground
-                                        accent: Color.accent
-                                        selected: routinesRoot.selectedPresetId === modelData.id
-                                        onClicked: routinesRoot.selectedPresetId = (routinesRoot.selectedPresetId === modelData.id ? "" : modelData.id)
-                                    }
-                                    Text { text: modelData.category; color: Color.foreground; opacity: 0.5; font.family: Style.font.family; font.pixelSize: Style.font.caption }
-                                    Button { focusable: true; text: "Start"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.startPreset(modelData.id) }
+                                    Item { Layout.fillWidth: true }
                                     Button {
                                         focusable: true
                                         text: "Duplicate"
                                         foreground: Color.foreground
                                         accent: Color.accent
-                                        onClicked: if (root.service) { root.service.duplicatePreset(modelData.id); routinesRoot.subMode = "mine" }
-                                    }
-                                }
-
-                                ColumnLayout {
-                                    visible: routinesRoot.selectedPresetId === modelData.id
-                                    Layout.fillWidth: true
-                                    Layout.leftMargin: Style.space(12)
-                                    Layout.bottomMargin: Style.space(8)
-                                    spacing: Style.spacing.xs
-
-                                    Text {
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                        text: modelData.description
-                                        color: Color.foreground
-                                        opacity: 0.75
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.body
-                                    }
-                                    Text {
-                                        Layout.fillWidth: true
-                                        wrapMode: Text.WordWrap
-                                        visible: modelData.items[0].notes !== ""
-                                        text: modelData.items[0].notes
-                                        color: Color.foreground
-                                        opacity: 0.6
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                    }
-                                    Text {
-                                        visible: modelData.items.length > 1
-                                        text: "Sequence: " + modelData.items.map(function (i) { return i.label }).join(" → ")
-                                        color: Color.foreground
-                                        opacity: 0.6
-                                        font.family: Style.font.family
-                                        font.pixelSize: Style.font.caption
-                                        wrapMode: Text.WordWrap
-                                        Layout.fillWidth: true
-                                    }
-                                    ColumnLayout {
-                                        visible: !!modelData.items[0].pattern
-                                        spacing: Style.spacing.xxs
-                                        Repeater {
-                                            model: modelData.items[0].pattern || []
-                                            delegate: Text {
-                                                required property string modelData
-                                                text: "•  " + modelData
-                                                color: Color.foreground
-                                                opacity: 0.7
-                                                font.family: Style.font.family
-                                                font.pixelSize: Style.font.caption
-                                            }
+                                        enabled: !!browser.chosen
+                                        onClicked: if (root.service && browser.chosen) {
+                                            root.service.duplicatePreset(browser.chosen.id); routinesRoot.subMode = "mine"
                                         }
                                     }
-
-                                    FretboardGrid {
-                                        visible: root.previewShowsFretboard(modelData.items[0])
-                                        Layout.fillWidth: true
-                                        Layout.preferredHeight: Style.space(160)
-                                        board: root.previewBoard(modelData.items[0])
-                                        stringLabels: root.previewStringLabels(modelData.items[0])
-                                        toneData: root.previewToneData(modelData.items[0])
-                                        startFret: root.previewFretWindow(modelData.items[0]) ? root.previewFretWindow(modelData.items[0]).startFret : 0
-                                        endFret: root.previewFretWindow(modelData.items[0]) ? root.previewFretWindow(modelData.items[0]).endFret : -1
-                                    }
-                                    RowLayout {
-                                        visible: root.previewShowsChordDiagram(modelData.items[0])
-                                        spacing: Style.spacing.lg
-                                        Repeater {
-                                            model: root.previewVoicings(modelData.items[0])
-                                            delegate: ChordDiagram {
-                                                required property var modelData
-                                                voicing: modelData
-                                            }
-                                        }
+                                    Button {
+                                        focusable: true
+                                        text: "Start Practice"
+                                        bordered: true
+                                        foreground: Color.foreground
+                                        accent: Color.accent
+                                        enabled: !!browser.chosen
+                                        onClicked: if (root.service && browser.chosen) root.service.startPreset(browser.chosen.id)
                                     }
                                 }
                             }

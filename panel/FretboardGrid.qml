@@ -17,16 +17,23 @@ Flickable {
     property var toneData: null       // { notes: [{pitchClass, interval}] } for interval lookup
     property int startFret: 0
     property int endFret: -1          // -1 = show the whole board
+    property bool showSequence: true
+    property bool allowScroll: false
+    property real maximumCellSize: Style.space(34)
 
     readonly property int stringCount: board ? board.strings.length : 0
     readonly property int firstFret: board ? Math.max(0, Math.min(startFret, board.fretCount)) : 0
     readonly property int lastFret: board ? Math.max(firstFret, Math.min(endFret >= 0 ? endFret : board.fretCount, board.fretCount)) : 0
-    readonly property int cellSize: Style.space(34)
+    readonly property real labelWidth: Style.space(22)
+    readonly property real cellSize: allowScroll ? maximumCellSize
+        : Math.min(maximumCellSize, Math.max(Style.space(18),
+            (width - labelWidth) / Math.max(1, lastFret - firstFret + 1)))
 
     contentWidth: grid.width
     contentHeight: height
     clip: true
     boundsBehavior: Flickable.StopAtBounds
+    interactive: allowScroll
     implicitHeight: grid.height + Style.space(14)
 
     function intervalFor(pitchClass) {
@@ -41,16 +48,24 @@ Flickable {
         return fallback
     }
 
+    function hasEmphasis() {
+        if (!board) return false
+        for (var s = 0; s < board.strings.length; s++)
+            for (var f = firstFret; f <= lastFret; f++)
+                if (board.strings[s][f] && board.strings[s][f].isEmphasized) return true
+        return false
+    }
+
     Column {
         id: grid
         y: Style.space(5)
         spacing: 0
 
         Row {
-            width: (root.lastFret - root.firstFret + 1) * root.cellSize + root.cellSize * 0.6
+            width: (root.lastFret - root.firstFret + 1) * root.cellSize + root.labelWidth
             height: root.cellSize * 0.6
             spacing: 0
-            Item { width: root.cellSize * 0.6; height: root.cellSize * 0.6 }
+            Item { width: root.labelWidth; height: root.cellSize * 0.6 }
             Repeater {
                 model: Math.max(0, root.lastFret - root.firstFret + 1)
                 delegate: Text {
@@ -79,7 +94,7 @@ Flickable {
 
                 Text {
                     visible: root.stringLabels.length > 0
-                    width: root.cellSize * 0.6
+                    width: root.labelWidth
                     height: root.cellSize
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
@@ -119,7 +134,13 @@ Flickable {
                             height: width
                             radius: width / 2
                             color: modelData.isRoot ? Color.accent : Color.foreground
-                            opacity: modelData.isRoot ? 1 : 0.55
+                            opacity: {
+                                if (!root.hasEmphasis()) return modelData.isRoot ? 1 : 0.55
+                                if (modelData.isEmphasized) return modelData.isRoot ? 1 : 0.78
+                                return modelData.isRoot ? 0.42 : 0.18
+                            }
+                            border.width: modelData.isEmphasized ? Math.max(1, Style.space(2)) : 0
+                            border.color: modelData.isRoot ? Color.foreground : Color.accent
                         }
 
                         Text {
@@ -130,6 +151,26 @@ Flickable {
                             font.family: Style.font.family
                             font.pixelSize: Style.font.caption
                             font.bold: true
+                            opacity: !root.hasEmphasis() || modelData.isEmphasized ? 1 : (modelData.isRoot ? 0.78 : 0.48)
+                        }
+
+                        Rectangle {
+                            visible: root.showSequence && modelData.highlighted && modelData.sequenceIndex > 0
+                            anchors.right: parent.right
+                            anchors.top: parent.top
+                            anchors.margins: 1
+                            width: root.cellSize * 0.38
+                            height: width
+                            radius: width / 2
+                            color: Color.accent
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.sequenceIndex || ""
+                                color: Color.background
+                                font.family: Style.font.family
+                                font.pixelSize: Math.max(7, root.cellSize * 0.25)
+                                font.bold: true
+                            }
                         }
                     }
                 }
