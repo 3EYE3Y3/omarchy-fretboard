@@ -84,13 +84,6 @@ Add and enable the repository directly:
 omarchy plugin add https://github.com/3EYE3Y3/omarchy-fretboard.git --enable
 ```
 
-Or install it manually:
-
-```bash
-git clone https://github.com/3EYE3Y3/omarchy-fretboard.git ~/.config/omarchy/plugins/io.github.3eye3y3.fretboard
-omarchy plugin enable io.github.3eye3y3.fretboard right
-```
-
 Once listed in the official marketplace, Fretboard can also be installed by its
 permanent plugin ID: `io.github.3eye3y3.fretboard`.
 
