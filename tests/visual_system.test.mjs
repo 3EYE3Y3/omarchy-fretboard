@@ -67,9 +67,9 @@ test("diminished and augmented triad filters retain exact quality and inversion 
   }
 })
 
-test("all 40 built-in presets and every constituent item have a supported data-driven visual", () => {
-  assert.equal(Presets.PRESET_ROUTINES.length, 40)
-  assert.equal(Presets.PRESET_ROUTINES.flatMap((preset) => Array.from(preset.items)).length, 73)
+test("all 57 built-in presets and every constituent item have a supported data-driven visual", () => {
+  assert.equal(Presets.PRESET_ROUTINES.length, 57)
+  assert.equal(Presets.PRESET_ROUTINES.flatMap((preset) => Array.from(preset.items)).length, 90)
   const supported = new Set(Array.from(Visual.MODES))
   for (const preset of Presets.PRESET_ROUTINES) for (const item of preset.items) {
     assert.ok(item.visualAid, `${preset.name}: ${item.label}`)
@@ -132,8 +132,8 @@ test("selector source switching, invalid IDs, deletion and persisted selection f
 
 test("every built-in preset is selectable once and its selected detail retains valid visual data", () => {
   const options = Browser.routineOptions(Presets.PRESET_ROUTINES)
-  assert.equal(options.length, 40)
-  assert.equal(new Set(Array.from(options, (o) => o.value)).size, 40)
+  assert.equal(options.length, 57)
+  assert.equal(new Set(Array.from(options, (o) => o.value)).size, 57)
   for (const option of options) {
     const chosen = Browser.selectedPreset(Presets.PRESET_ROUTINES, "All", option.value)
     assert.equal(chosen.id, option.value)

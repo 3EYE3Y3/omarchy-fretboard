@@ -3,8 +3,8 @@
 ## Automated
 
 ```bash
-npm test                                        # 136 tests, node:test + node:assert/strict
-python3 -m unittest discover -s helper/tests    # 30 tests, stdlib unittest
+npm test                                        # 196 tests, node:test + node:assert/strict
+python3 -m unittest discover -s helper/tests    # 47 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
 
@@ -22,14 +22,20 @@ reimplementation drift between "the logic" and "the tested logic."
 | Fretboard | `js/fretboard.js` / `tests/fretboard.test.mjs` | Note-at-fret math, 24+ fret board construction, scale/chord highlighting and root marking, generic "one position" fret-window search |
 | Chord voicings | `js/chord_voicings.js` / `tests/chord_voicings.test.mjs` | Exact common open/barre/7/sus/power fixtures; required-tone, no-extra-tone and span checks for all 11 families in all 12 roots; deliberate suppression in non-Standard tunings |
 | Circle of fifths | `js/circle_of_fifths.js` / `tests/circle_of_fifths.test.mjs` | Key order, relative major/minor pairing, sharps/flats, wraparound neighbors |
-| Routines | `js/routines.js` / `tests/routines.test.mjs` | Create/add/update/remove/reorder/duplicate, and the full start→advance→complete run state machine |
+| Routines | `js/routines.js` / `tests/routines.test.mjs` | Create/add/update/remove/reorder/duplicate, the full start→advance→complete run state machine, and (v0.4) `hasStages`/`resolveStageItem` stage-patch resolution, nested metronome merge, clamped out-of-range index, static-item passthrough |
+| Dynamic stage engine | `js/stage_engine.js` / `tests/stage_engine.test.mjs` | Time- and bar-based stage index at elapsed time/completed bars, held at the last stage past the end, manual-jump rebase math, remaining-time/bars countdown, total duration/bars, clamping and empty-input safety |
+| Dynamic routines & hybrid picking (v0.4) | `js/presets.js` / `tests/dynamic_routines.test.mjs` | All 9 dynamic/staged presets resolve every stage to a valid in-range visual; exact Box 1-5 sequence and ascend/descend order; exact triad-inversion and triad-string-set coordinates per stage; subdivision-ladder and tempo-ladder stage values; the 3 dynamic hybrid routines use the same generic engine; all 8 static + 3 dynamic hybrid routines use only documented P/M/R labels; thirds/sixths dyads pair P with the lower string |
 | Progression suggestions | `js/progress.js` / `tests/progress.test.mjs` | Clean/Nearly/Needs Work → next-BPM suggestion (matches the spec's 100→102-105 example), practice-minute/streak/session stats |
 | Persistence & migration | `js/storage.js` / `tests/storage.test.mjs` | Empty/missing file, well-formed round-trip, invalid JSON, malformed-entry recovery, missing-key backfill, schema-version migration flag, preference clamping, tuner-sensitivity default-fill/rejection |
 | Practice-session presets | `js/presets.js` / `tests/presets.test.mjs` | All 7 categories present, curated size (not empty, not hundreds), unique/stable/namespaced ids, every scale/chord reference is a real id + valid note name, item shape matches `routines.js`'s `createItem` exactly (drift guard), a diatonic-triad-style progression produces one item per chord in order, duplicating a preset clears the `preset` flag and never mutates the source (JSON diff before/after), duplicating a multi-item chord progression preserves every chord |
 | Independent canonical music fixtures | `tests/canonical_music.test.mjs` | Exact A-minor-pentatonic Boxes 1–5 and root coordinates, E-minor Box 1/transposition, literal six-string 0–12 maps for A minor pentatonic/C major/G major/A natural minor/D Dorian, open strings, roots, interval coverage, alternate-tuning recalculation, all formulas in all roots, E-major 3NPS, triad inversions, exact conventional chord shapes, tuning restrictions, and every positional preset coordinate |
-| Position/practice visual contract | `tests/visual_system.test.mjs` | Full context plus exact Box 1–5 emphasis, octave-equivalent 0–12 shapes, roots, A major/minor inversion and four-string-set filters, diminished/augmented triads, all 73 items having a supported/valid visual, rhythm/metronome agreement, correct 6/8 grouping, category-filtered dropdown options, source switching and safe stale/deleted selection fallback |
+| Position/practice visual contract | `tests/visual_system.test.mjs` | Full context plus exact Box 1–5 emphasis, octave-equivalent 0–12 shapes, roots, A major/minor inversion and four-string-set filters, diminished/augmented triads, all 90 items having a supported/valid visual, rhythm/metronome agreement, correct 6/8 grouping, category-filtered dropdown options, source switching and safe stale/deleted selection fallback |
+| Configurable routine templates (v0.5) | `js/presets.js` / `tests/routine_templates.test.mjs` | All 7 scale templates (box positions limited to audited pentatonic shapes), key transposition, exact-box selection, dynamic 5-stage Box 1-5 cycling with matching duration, dynamic ignored where no boxed position exists, unknown-template safety, item-shape drift guard against `routines.js`; hybrid-pentatonic P/M role labels and dynamic cycling; shared triad root/quality/inversion/string-set descriptor lists cross-checked against `visual_shapes.js`'s own `TRIAD_INTERVALS`/`TRIAD_STRING_SETS` |
+| Jam Session progressions (v0.5) | `js/jam_sessions.js` / `tests/jam_sessions.test.mjs` | All 8 styles present across Blues/Jazz genres, all 12 keys; exact transposed chord symbols for every style (major/minor blues, ii-V-I/ii-V-i, jazz blues, Dorian vamp) against the sourced forms in `docs/MUSIC_CONTENT_AUDIT.md`; shuffle/slow blues reuse the identical progression; bar-per-chord counts; every style×key combination resolves without throwing; unknown-style safety |
+| Dynamic stage engine looping (v0.5) | `js/stage_engine.js` / `tests/stage_engine.test.mjs` | `loopedAutoStageIndex`/`loopedStageIndexAt*` wrap back to stage 0 instead of holding at the end, in both time and bar mode; `completedCycles`; `loopedStageBarsRemaining`/`loopedStageSecondsRemaining` count down correctly across a cycle-wrap boundary |
 | Manifest | `manifest.json` / `tests/manifest.test.mjs` | Schema version, non-reserved id, every kind has a matching, existing entry point |
 | Click-schedule math (Python) | `helper/click_schedule.py` / `helper/tests/test_click_schedule.py` | Same tick/beat/accent math as `js/metronome.js`, verified independently on the audio engine's own side |
+| Jam synthesis math (Python, v0.5) | `helper/jam_synth.py` / `helper/tests/test_jam_synth.py` | Chord-tone pitch classes for all 7 qualities (including wraparound), A4=440Hz/octave reference frequencies, the boom-chick bass pattern (root on 1/3, fifth on 2/4, safe fallback), beat-role assignment (kick+bass / snare+comp / hi-hat), shuffle/swing timing offset (positive, tempo-scaled, zero for "straight") |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
 | Tuner noise-tolerance stabilizer | `helper/tuner_stability.py` / `helper/tests/test_tuner_stability.py` | Silence, low-level broadband noise, and a short single-hop transient never confirm a lock; a clean tone (alone, and under quiet background noise) locks quickly and accurately; a decaying tone is held through most of the decay without drifting to an unrelated pitch and releases exactly once; a steady tone never flickers once locked; Noisy Room requires a louder signal than Normal and Quiet confirms no slower than Noisy Room; every sensitivity preset's parameters are internally consistent; plus fast pure-logic unit tests of the stabilizer's confirm/hold/hysteresis/switch behavior against synthetic frames |
 
@@ -38,6 +44,101 @@ file (informational — the shared `qs.Ui`/`qs.Commons` singletons trip a handfu
 known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
+
+## Manual configurable-routines and Jam Session review (v0.5.0)
+
+Same isolated method as the v0.4 review below: real `Service.qml` and
+`panel/PracticeSection.qml` driven through Quickshell's Qt offscreen
+backend via a throwaway `qs -c` config (removed afterward), isolated
+`XDG_STATE_HOME`, never touching the live desktop's actual plugin config.
+Verified against real screenshots and live property values:
+
+- **Configurable Minor Pentatonic**: selecting key E + Box 3 resolved the
+  exact verified Box 3 coordinates transposed to E; enabling Dynamic built a
+  5-stage Box 1→5 sequence; starting it showed "E Minor Pentatonic - Box 1",
+  "Stage 1 of 5", and `nextStage()` correctly advanced to Box 2 with the
+  fretboard highlight changing to the transposed Box 2 shape.
+- **Configurable Triad**: root F, quality minor, inversion "All", string set
+  234, Dynamic on resolved a 3-stage root/1st/2nd sequence; the running view
+  showed "F Minor Triad", "Root position", "Stage 1 of 3" with F-Ab-C at the
+  correct frets (F emphasized as root).
+- **Configurable Hybrid Triad**: root D, quality major, string set 345
+  resolved a `PICKING_PATTERN` visual with exactly the P/M/R labels at the
+  three triad-tone coordinates.
+- **Jam Session**: starting a Jazz Blues in C at 130 BPM showed "Jam: Jazz
+  Blues in C" (fixed - see below), the correct opening chord C7, bar
+  counting against a 12-bar total, and - because this offscreen harness
+  still runs the real local `pw-cat` audio pipeline, only the *visual*
+  platform is offscreen - the chord actually advanced from C7 to F7 in real
+  time, confirming the bar-count-driven progression genuinely tracks live
+  audio-clock-paced bars, not a simulated one. Pause set both
+  `practiceTimerRunning`-equivalent (`jamRunning`) to false and stopped
+  audio; Resume restarted both. The 600px narrow layout kept the chord
+  display, fretboard, BPM controls and Pause/Stop buttons within frame.
+  This pass briefly produced a few seconds of real generated backing-track
+  audio through the system's actual audio output (pause/resume/stop cycled
+  quickly) - an unavoidable side effect of exercising the real audio
+  process rather than a UI mock; no persistent or orphaned audio process
+  remained afterward.
+- **Bug found and fixed during this review**: the running Jam view's header
+  read the *setup form's* pending style selection instead of the actually-
+  running session's style, which could show a stale label if the two ever
+  diverged (invisible in normal click-driven use, but caught here since the
+  test drove `Service.startJam` directly). Fixed to read
+  `service.jamStyleById(service.jamStyleId)` for the running header only;
+  the setup form correctly keeps using its own pending selection. Also
+  fixed a pre-existing null-safety gap in
+  `previewShowsChordDiagram(item)` (every sibling `preview*` helper already
+  guarded `item` being null; this one didn't), exposed by the Configurable
+  preview being legitimately null before a template is chosen.
+
+No QML reference, binding or type error was logged after these fixes.
+
+## Manual dynamic-practice review (v0.4.0)
+
+The real `Service.qml` and `panel/PracticeSection.qml` (unmodified production
+files, not a reimplementation) were driven through Quickshell's Qt offscreen
+backend, isolated from the live desktop: a throwaway `qs -c` config under
+`~/.config/quickshell/` (removed afterward), `QT_QPA_PLATFORM=offscreen` (no
+window ever touched the real Wayland session), and an isolated
+`XDG_STATE_HOME` so no real persisted state was read or written. A driver
+script called the same public `Service` functions the UI calls
+(`setRoutineBrowserSource/Category/Selection`, `startPreset`, `nextStage`,
+`previousStage`, `pausePracticeTimer`, `resumePracticeTimer`, `stopRoutine`)
+and captured `grabToImage` screenshots at 800×660 and 600×660.
+
+Verified against real screenshots and live property values, not just Node
+unit tests:
+- **Minor Pentatonic — All 5 Boxes**: preview showed the stage sequence and
+  Box 1 visual; Start Practice showed "Stage 1 of 5", "Box 1", its notes, and
+  a live countdown; `nextStage()` moved to "Stage 2 of 5" / "Box 2" with the
+  fretboard highlight visibly changing to Box 2's coordinates while the
+  session's total timer kept counting down without resetting (10:00 → 9:58);
+  `previousStage()` correctly returned to Box 1.
+- **Triad Inversion Ladder**: running view's `visualAid.positions` matched
+  the exact verified G-major root-position coordinates.
+- **Tempo Ladder — 80 to 100 BPM**: after two `nextStage()` calls, both the
+  stage label and the live `metronomeBpm` read 90 BPM - confirming a stage
+  actually changes the running metronome, not just displayed text.
+- **Hybrid Picking — Pick + Middle + Ring** (static) and **Hybrid Picking —
+  Triad Cycle** (dynamic): both rendered the `PICKING_PATTERN` fretboard dots
+  plus the P/M/R sequence strip beneath it; the dynamic routine showed
+  "Stage 1 of 3" / "Root position" with the correct 3-note coordinates.
+- **Pause/Resume**: `pausePracticeTimer()` set both `practiceTimerRunning`
+  and `stageRunning` to `false`; `resumePracticeTimer()` set both back to
+  `true` - confirming stage progression pauses/resumes with the existing
+  practice-timer control, not a separate one.
+- **Narrow panel (600×660)**: the running dynamic view (stage indicator,
+  Previous/Next, visual, BPM, timer, Finish/Stop) stayed within frame with no
+  overflow or clipping.
+
+No QML reference, binding or type error was logged across the full run
+(`module qs.Commons`/`qs.Ui` resolved cleanly once mapped correctly for the
+throwaway config; only the expected offscreen-platform warning appeared).
+Audio-process behavior itself is unchanged by v0.4 (only which BPM/
+subdivision values are sent to the existing helper changed per stage), and
+remains covered by the existing 30 Python helper tests; live metronome audio
+was not separately re-verified in this offscreen pass.
 
 ## Manual routine-selector review (v0.3.5)
 

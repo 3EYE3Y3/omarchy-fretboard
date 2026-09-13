@@ -82,3 +82,75 @@ test("progress fraction is complete for an empty routine", () => {
   const run = Routines.startRun(routine)
   assert.equal(Routines.progressFraction(routine, run), 1)
 })
+
+// ------------------------------------------------------------ dynamic stages (v0.4)
+
+test("createItem stores a normalized stages/advance pair, or null for a plain item", () => {
+  const plain = Routines.createItem({ label: "Static" })
+  assert.equal(plain.stages, null)
+  assert.equal(plain.advance, null)
+
+  const dynamic = Routines.createItem({
+    label: "Dynamic", stages: [{ label: "Box 1" }, { label: "Box 2" }],
+    advance: { mode: "bars", everyBars: 4 }
+  })
+  assert.equal(dynamic.stages.length, 2)
+  assert.equal(dynamic.advance.mode, "bars")
+  assert.equal(dynamic.advance.everyBars, 4)
+
+  // An advance with no stages array never counts as dynamic.
+  const noStages = Routines.createItem({ label: "x", advance: { mode: "time", everySeconds: 30 } })
+  assert.equal(noStages.stages, null)
+})
+
+test("hasStages is true only for a well-formed stages+advance pair", () => {
+  assert.equal(Routines.hasStages(Routines.createItem({ label: "static" })), false)
+  assert.equal(Routines.hasStages(Routines.createItem({
+    label: "dyn", stages: [{ label: "a" }], advance: { mode: "time", everySeconds: 60 }
+  })), true)
+  assert.equal(Routines.hasStages(null), false)
+})
+
+test("resolveStageItem merges a stage patch onto its base item and clears stages/advance", () => {
+  const item = Routines.createItem({
+    label: "Base", notes: "base notes", targetBpm: 90,
+    metronome: { timeSignatureId: "4-4", subdivisionId: "eighth" },
+    scaleKey: { key: "A", scaleId: "minor_pentatonic" },
+    stages: [
+      { label: "Box 1", notes: "box 1 notes" },
+      { label: "Box 2", notes: "box 2 notes", metronome: { subdivisionId: "triplet" } }
+    ],
+    advance: { mode: "time", everySeconds: 60 }
+  })
+
+  const stage0 = Routines.resolveStageItem(item, 0)
+  assert.equal(stage0.label, "Box 1")
+  assert.equal(stage0.notes, "box 1 notes")
+  assert.equal(stage0.targetBpm, 90) // inherited, not overridden by the stage
+  assert.equal(stage0.scaleKey.key, "A") // inherited nested field survives
+  assert.equal(stage0.stages, null)
+  assert.equal(stage0.advance, null)
+
+  const stage1 = Routines.resolveStageItem(item, 1)
+  assert.equal(stage1.label, "Box 2")
+  // Metronome merges shallowly: subdivisionId overridden, timeSignatureId kept.
+  assert.equal(stage1.metronome.subdivisionId, "triplet")
+  assert.equal(stage1.metronome.timeSignatureId, "4-4")
+
+  // Base item itself is never mutated by resolving a stage.
+  assert.equal(item.notes, "base notes")
+  assert.equal(item.metronome.subdivisionId, "eighth")
+})
+
+test("resolveStageItem clamps an out-of-range index instead of throwing", () => {
+  const item = Routines.createItem({
+    label: "Base", stages: [{ label: "a" }, { label: "b" }], advance: { mode: "time", everySeconds: 60 }
+  })
+  assert.equal(Routines.resolveStageItem(item, -5).label, "a")
+  assert.equal(Routines.resolveStageItem(item, 99).label, "b")
+})
+
+test("resolveStageItem is a no-op passthrough for a non-dynamic item", () => {
+  const item = Routines.createItem({ label: "Static" })
+  assert.equal(Routines.resolveStageItem(item, 3), item)
+})

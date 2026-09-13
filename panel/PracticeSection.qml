@@ -15,7 +15,7 @@ Item {
     id: root
     property var service: null
     property var bar: null
-    property string mode: "metronome" // metronome | routines | trainer | timer
+    property string mode: "metronome" // metronome | routines | trainer | timer | jam
     readonly property var routineSelectorState: PresetBrowser.selectorState(
         service && service.preferences ? service.preferences.routineSource : "presets",
         service ? service.allPresets() : [],
@@ -31,7 +31,8 @@ Item {
         { value: "metronome", label: "Metronome" },
         { value: "routines", label: "Routines" },
         { value: "trainer", label: "Tempo Trainer" },
-        { value: "timer", label: "Timer" }
+        { value: "timer", label: "Timer" },
+        { value: "jam", label: "Jam" }
     ]
 
     ColumnLayout {
@@ -53,6 +54,7 @@ Item {
             sourceComponent: root.mode === "trainer" ? trainerView
                 : root.mode === "timer" ? timerView
                 : root.mode === "routines" ? routinesView
+                : root.mode === "jam" ? jamView
                 : metronomeView
         }
     }
@@ -363,6 +365,247 @@ Item {
         return m + ":" + (s < 10 ? "0" : "") + s
     }
 
+    // ------------------------------------------------------------ Jam Sessions (v0.5)
+    Component {
+        id: jamView
+        ColumnLayout {
+            id: jamRoot
+            width: layout.width
+            spacing: Style.spacing.md
+            property string genre: "Blues"
+            property string styleId: "major-blues"
+            property string key: "A"
+            property string durationPreset: "10"
+            // Referenced (no-op) inside running-view text bindings so a 1s
+            // tick forces them to re-evaluate - jamRemainingSeconds()/
+            // jamCurrentBarNumber() depend on Date.now(), which QML cannot
+            // track as a binding dependency on its own.
+            property int tick: 0
+
+            readonly property var currentStyle: root.service ? root.service.jamStyleById(styleId) : null
+
+            Timer {
+                interval: 1000
+                repeat: true
+                running: root.service ? root.service.jamActive : false
+                onTriggered: jamRoot.tick += 1
+            }
+
+            // jamRemainingSeconds()/jamCurrentBarNumber() depend on
+            // Date.now(), which a QML binding cannot track on its own;
+            // reading `tick` as a plain statement (not a comma expression)
+            // forces these to re-evaluate on the Timer above.
+            function barProgressLabel() {
+                var forceTick = tick
+                return root.service ? "Bar " + root.service.jamCurrentBarNumber() + " / " + root.service.jamTotalBars() : ""
+            }
+            function remainingTimeLabel() {
+                var forceTick = tick
+                return root.service ? root.formatSeconds(root.service.jamRemainingSeconds()) : ""
+            }
+
+            // ---- running view ----
+            ColumnLayout {
+                visible: root.service ? root.service.jamActive : false
+                Layout.fillWidth: true
+                spacing: Style.spacing.sm
+
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.accent; opacity: 0.35 }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    PanelSectionHeader {
+                        // The *running* session's own style/key, not the setup
+                        // form's pending selection - they can differ (e.g. this
+                        // view driven directly via Service for testing).
+                        readonly property var runningStyle: root.service && root.service.jamStyleId ? root.service.jamStyleById(root.service.jamStyleId) : null
+                        text: "Jam: " + (runningStyle ? runningStyle.label : "") + " in " + (root.service ? root.service.jamKey : "")
+                    }
+                    Item { Layout.fillWidth: true }
+                    Text {
+                        text: jamRoot.barProgressLabel()
+                        color: Color.foreground
+                        opacity: 0.65
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.lg
+                    ColumnLayout {
+                        spacing: Style.spacing.xxs
+                        Text {
+                            text: "Now"
+                            color: Color.foreground; opacity: 0.6
+                            font.family: Style.font.family; font.pixelSize: Style.font.caption
+                        }
+                        Text {
+                            text: root.service && root.service.activeJamStage() ? root.service.activeJamStage().chordSymbol : ""
+                            color: Color.accent
+                            font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true
+                        }
+                    }
+                    ColumnLayout {
+                        spacing: Style.spacing.xxs
+                        Text {
+                            text: "Next"
+                            color: Color.foreground; opacity: 0.6
+                            font.family: Style.font.family; font.pixelSize: Style.font.caption
+                        }
+                        Text {
+                            text: root.service && root.service.activeJamNextStage() ? root.service.activeJamNextStage().chordSymbol : ""
+                            color: Color.foreground; opacity: 0.85
+                            font.family: Style.font.family; font.pixelSize: Style.font.heading
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                    ColumnLayout {
+                        spacing: Style.spacing.xxs
+                        Text {
+                            text: "Remaining"
+                            color: Color.foreground; opacity: 0.6
+                            font.family: Style.font.family; font.pixelSize: Style.font.caption
+                        }
+                        Text {
+                            text: jamRoot.remainingTimeLabel()
+                            color: Color.foreground
+                            font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true
+                        }
+                    }
+                }
+
+                FretboardGrid {
+                    Layout.fillWidth: true
+                    board: root.service ? root.service.jamFretboardBoard() : null
+                    stringLabels: root.stringLabelsFor(root.service)
+                    maximumCellSize: Style.space(24)
+                    startFret: 0
+                    endFret: -1
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.lg
+                    Text {
+                        text: (root.service ? root.service.jamTempo : "") + " BPM"
+                        color: Color.accent
+                        font.family: Style.font.family; font.pixelSize: Style.font.title; font.bold: true
+                    }
+                    Button { focusable: true; text: "−"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.adjustJamTempo(-1) }
+                    Button { focusable: true; text: "+"; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.adjustJamTempo(1) }
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        focusable: true
+                        text: root.service && root.service.jamRunning ? "Pause" : "Resume"
+                        bordered: true
+                        foreground: Color.foreground; accent: Color.accent
+                        onClicked: {
+                            if (!root.service) return
+                            if (root.service.jamRunning) root.service.pauseJam()
+                            else root.service.resumeJam()
+                        }
+                    }
+                    Button { focusable: true; text: "Stop Jam"; bordered: true; foreground: Color.foreground; accent: Color.accent; onClicked: if (root.service) root.service.stopJam() }
+                }
+
+                Rectangle { Layout.fillWidth: true; Layout.preferredHeight: 1; color: Color.foreground; opacity: 0.18 }
+            }
+
+            // ---- setup view ----
+            ColumnLayout {
+                visible: root.service ? !root.service.jamActive : true
+                Layout.fillWidth: true
+                spacing: Style.spacing.sm
+
+                PanelSectionHeader { text: "Jam Session" }
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    text: "A local, generated backing track (bass, chord comping, drums) - no downloads, no network. Chord changes and fretboard guidance follow the progression automatically."
+                    color: Color.foreground; opacity: 0.7
+                    font.family: Style.font.family; font.pixelSize: Style.font.caption
+                }
+
+                ButtonGroup {
+                    id: genreGroup
+                    Layout.fillWidth: true
+                    options: root.service ? root.service.jamGenres() : []
+                    value: jamRoot.genre
+                    foreground: Color.foreground
+                    accent: Color.accent
+                    onChanged: function (value) {
+                        jamRoot.genre = value
+                        var styles = root.service ? root.service.jamStylesByGenre(value) : []
+                        if (styles.length) jamRoot.styleId = styles[0].id
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.md
+                    Dropdown {
+                        Layout.preferredWidth: Style.space(260)
+                        Layout.fillWidth: true
+                        label: "Style"
+                        options: (root.service ? root.service.jamStylesByGenre(jamRoot.genre) : []).map(function (s) { return { value: s.id, label: s.label } })
+                        value: jamRoot.styleId
+                        onChanged: function (value) { jamRoot.styleId = value }
+                    }
+                    Dropdown {
+                        Layout.preferredWidth: Style.space(110)
+                        label: "Key"
+                        options: root.service ? root.service.jamKeys() : []
+                        value: jamRoot.key
+                        onChanged: function (value) { jamRoot.key = value }
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    wrapMode: Text.WordWrap
+                    visible: !!jamRoot.currentStyle
+                    text: jamRoot.currentStyle ? jamRoot.currentStyle.description : ""
+                    color: Color.foreground; opacity: 0.62
+                    font.family: Style.font.family; font.pixelSize: Style.font.caption
+                }
+
+                NumberField { label: "Tempo (BPM)"; value: jamRoot.currentStyle ? jamRoot.currentStyle.defaultTempo : 100; from: 40; to: 240; id: jamTempoField }
+
+                PanelSectionHeader { text: "Duration (minutes)" }
+                ButtonGroup {
+                    id: jamDurationGroup
+                    Layout.fillWidth: true
+                    options: ["5", "10", "15", "20", "Custom"]
+                    value: jamRoot.durationPreset
+                    foreground: Color.foreground
+                    accent: Color.accent
+                    onChanged: function (value) { jamRoot.durationPreset = value }
+                }
+                NumberField {
+                    visible: jamDurationGroup.value === "Custom"
+                    label: "Custom minutes"; value: 10; from: 1; to: 60
+                    id: jamCustomMinutesField
+                }
+
+                Button {
+                    focusable: true
+                    text: "Start Jam"
+                    bordered: true
+                    foreground: Color.foreground
+                    accent: Color.accent
+                    onClicked: {
+                        if (!root.service) return
+                        var minutes = jamDurationGroup.value === "Custom" ? jamCustomMinutesField.value : Number(jamDurationGroup.value)
+                        var bpm = jamTempoField.value || (jamRoot.currentStyle ? jamRoot.currentStyle.defaultTempo : 100)
+                        root.service.startJam(jamRoot.styleId, jamRoot.key, bpm, minutes)
+                    }
+                }
+            }
+        }
+    }
+
     // ------------------------------------------------------------ preview helpers (read-only - never touch live reference state)
     function previewToneData(item) {
         if (!item) return null
@@ -434,7 +677,7 @@ Item {
     }
 
     function previewShowsChordDiagram(item) {
-        return !!item.chordKey && !!item.visualAid && item.visualAid.mode === VisualShapes.CHORD_SHAPE
+        return !!item && !!item.chordKey && !!item.visualAid && item.visualAid.mode === VisualShapes.CHORD_SHAPE
     }
 
     function previewStringLabels(item) {
@@ -456,11 +699,41 @@ Item {
             width: layout.width
             spacing: Style.spacing.md
             readonly property var selector: root.routineSelectorState
-            readonly property string subMode: selector.source
+            // Plain (not readonly) so the "Configurable" source - a v0.5
+            // local UI state, never persisted the way presets/mine sources
+            // are - can be selected without going through service preferences.
+            property string subMode: selector.source
             readonly property string category: selector.category
             readonly property var chosen: selector.selected
             readonly property var selectedItem: chosen && chosen.items.length ? chosen.items[0] : null
             property bool editorOpen: false
+
+            // ---- configurable routine templates (v0.5) ----
+            property string configurableCategory: "Scales"
+            property string configurableTemplateId: ""
+            readonly property var configurableTemplateList: root.service ? root.service.configurableTemplatesByCategory(configurableCategory) : []
+            readonly property var configurableDescriptor: root.service ? root.service.configurableTemplateById(configurableTemplateId) : null
+            property string cfgKey: "A"
+            property string cfgPosition: "all"
+            property string cfgRoot: "A"
+            property string cfgQuality: "major"
+            property string cfgInversion: "root"
+            property string cfgStringSet: "123"
+            property bool cfgDynamic: false
+
+            function isScaleLikeTemplate(descriptor) { return !!descriptor && (descriptor.kind === "scale" || descriptor.kind === "hybrid-pentatonic") }
+            function isTriadLikeTemplate(descriptor) { return !!descriptor && (descriptor.kind === "triad" || descriptor.kind === "hybrid-triad") }
+
+            function currentConfigurableConfig() {
+                return {
+                    key: cfgKey, position: cfgDynamic ? "all" : cfgPosition,
+                    root: cfgRoot, quality: cfgQuality, inversion: cfgInversion, stringSet: cfgStringSet,
+                    targetBpm: cfgBpmField.value, durationMinutes: cfgDurationField.value,
+                    dynamic: cfgDynamic, dynamicEverySeconds: cfgDynamicSecondsField.value
+                }
+            }
+            readonly property var configurablePreviewItem: (root.service && configurableTemplateId && cfgBpmField && cfgDurationField && cfgDynamicSecondsField)
+                ? root.service.resolveConfigurableRoutine(configurableTemplateId, currentConfigurableConfig()) : null
             property string editorName: ""
             property var editorItems: []
 
@@ -469,6 +742,22 @@ Item {
             function suggestedBpm(item) {
                 if (!item) return "—"
                 return item.targetBpm || (item.metronome ? item.metronome.startBpm : null) || "—"
+            }
+
+            function isDynamic(item) {
+                return !!(item && Array.isArray(item.stages) && item.stages.length > 0 && item.advance)
+            }
+
+            function stageSequenceText(item) {
+                if (!isDynamic(item)) return ""
+                return item.stages.map(function (s) { return s.label || "" }).join(" → ")
+            }
+
+            function stageAdvanceText(item) {
+                if (!isDynamic(item)) return ""
+                return item.advance.mode === "bars"
+                    ? ("every " + item.advance.everyBars + " bar" + (item.advance.everyBars === 1 ? "" : "s"))
+                    : ("every " + item.advance.everySeconds + "s")
             }
 
             function metronomeSummary(item) {
@@ -555,6 +844,43 @@ Item {
                     opacity: 0.75
                     font.family: Style.font.family
                     font.pixelSize: Style.font.body
+                }
+
+                // Dynamic-routine stage strip: current position, a restrained
+                // remaining-time readout (time-based advance only - bar-based
+                // advance is paced by the metronome instead), and manual
+                // Previous/Next. No modal or acknowledgement interrupts play;
+                // the stage simply relabels and the visual updates in place.
+                RowLayout {
+                    visible: root.service ? root.service.activeStageIsDynamic() : false
+                    Layout.fillWidth: true
+                    spacing: Style.spacing.md
+                    Text {
+                        text: root.service ? "Stage " + (root.service.stageIndex + 1) + " of " + root.service.activeStageCount() : ""
+                        color: Color.accent
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                        font.bold: true
+                    }
+                    Text {
+                        visible: root.service ? root.service.activeStageSecondsRemaining() !== null : false
+                        text: root.service ? root.formatSeconds(root.service.activeStageSecondsRemaining()) + " remaining" : ""
+                        color: Color.foreground
+                        opacity: 0.65
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.caption
+                    }
+                    Item { Layout.fillWidth: true }
+                    Button {
+                        focusable: true; text: "Previous"; foreground: Color.foreground; accent: Color.accent
+                        enabled: root.service ? root.service.stageIndex > 0 : false
+                        onClicked: if (root.service) root.service.previousStage()
+                    }
+                    Button {
+                        focusable: true; text: "Next"; foreground: Color.foreground; accent: Color.accent
+                        enabled: root.service ? root.service.stageIndex < root.service.activeStageCount() - 1 : false
+                        onClicked: if (root.service) root.service.nextStage()
+                    }
                 }
 
                 // The same data-driven teaching visual used in the browser is
@@ -652,17 +978,25 @@ Item {
             ButtonGroup {
                 visible: root.service ? !root.service.activeRoutine : true
                 Layout.fillWidth: true
-                options: [{ value: "presets", label: "Practice Sessions" }, { value: "mine", label: "My Routines" }]
+                options: [{ value: "presets", label: "Practice Sessions" }, { value: "mine", label: "My Routines" }, { value: "configurable", label: "Configurable" }]
                 value: routinesRoot.subMode
                 foreground: Color.foreground
                 accent: Color.accent
                 onChanged: function (value) {
-                    if (root.service) root.service.setRoutineBrowserSource(value)
+                    routinesRoot.subMode = value
+                    if (value === "configurable") {
+                        if (root.service) {
+                            var templates = root.service.configurableTemplatesByCategory(routinesRoot.configurableCategory)
+                            routinesRoot.configurableTemplateId = templates.length ? templates[0].id : ""
+                        }
+                    } else if (root.service) {
+                        root.service.setRoutineBrowserSource(value)
+                    }
                 }
             }
 
             RowLayout {
-                visible: root.service ? !root.service.activeRoutine : true
+                visible: root.service && routinesRoot.subMode !== "configurable" ? !root.service.activeRoutine : false
                 Layout.fillWidth: true
                 spacing: Style.spacing.md
 
@@ -699,7 +1033,7 @@ Item {
             // Only one selected routine exists in the content tree. Its content
             // scrolls inside this fixed surface; selectors and actions stay put.
             Rectangle {
-                visible: root.service ? !root.service.activeRoutine : true
+                visible: root.service && routinesRoot.subMode !== "configurable" ? !root.service.activeRoutine : false
                 Layout.fillWidth: true
                 Layout.preferredHeight: Style.space(330)
                 color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.025)
@@ -828,6 +1162,17 @@ Item {
                                     font.family: Style.font.family
                                     font.pixelSize: Style.font.caption
                                 }
+                                Text {
+                                    visible: routinesRoot.isDynamic(routinesRoot.selectedItem)
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    text: "Dynamic routine — stages: " + routinesRoot.stageSequenceText(routinesRoot.selectedItem)
+                                        + " (advances " + routinesRoot.stageAdvanceText(routinesRoot.selectedItem) + ")"
+                                    color: Color.accent
+                                    opacity: 0.85
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                }
                             }
 
                             ColumnLayout {
@@ -927,6 +1272,191 @@ Item {
                                 else root.service.startPreset(routinesRoot.chosen.id)
                             }
                         }
+                    }
+                }
+            }
+
+            // ---- configurable routine templates (v0.5) ----
+            RowLayout {
+                visible: root.service && routinesRoot.subMode === "configurable" ? !root.service.activeRoutine : false
+                Layout.fillWidth: true
+                spacing: Style.spacing.md
+
+                Dropdown {
+                    Layout.preferredWidth: Style.space(210)
+                    Layout.fillWidth: true
+                    label: "Category"
+                    options: root.service ? root.service.configurableCategories() : []
+                    value: routinesRoot.configurableCategory
+                    onChanged: function (value) {
+                        routinesRoot.configurableCategory = value
+                        var templates = root.service ? root.service.configurableTemplatesByCategory(value) : []
+                        routinesRoot.configurableTemplateId = templates.length ? templates[0].id : ""
+                    }
+                }
+                Dropdown {
+                    Layout.preferredWidth: Style.space(360)
+                    Layout.fillWidth: true
+                    label: "Routine"
+                    options: routinesRoot.configurableTemplateList.map(function (t) { return { value: t.id, label: t.name } })
+                    value: routinesRoot.configurableTemplateId
+                    enabled: routinesRoot.configurableTemplateList.length > 0
+                    onChanged: function (value) { routinesRoot.configurableTemplateId = value }
+                }
+            }
+
+            Rectangle {
+                visible: root.service && routinesRoot.subMode === "configurable" ? !root.service.activeRoutine : false
+                Layout.fillWidth: true
+                Layout.preferredHeight: Style.space(330)
+                color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.025)
+                radius: Style.space(6)
+                clip: true
+
+                Flickable {
+                    id: configurableScroll
+                    anchors.fill: parent
+                    anchors.margins: Style.space(10)
+                    contentWidth: width
+                    contentHeight: configurableDetail.implicitHeight
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    interactive: contentHeight > height
+
+                    ColumnLayout {
+                        id: configurableDetail
+                        width: configurableScroll.width
+                        spacing: Style.spacing.xs
+
+                        Text {
+                            Layout.fillWidth: true
+                            text: routinesRoot.configurableDescriptor ? routinesRoot.configurableDescriptor.name : "No configurable routine"
+                            color: Color.foreground
+                            font.family: Style.font.family; font.pixelSize: Style.font.heading; font.bold: true
+                            wrapMode: Text.WordWrap
+                        }
+
+                        // ---- scale/hybrid-pentatonic fields ----
+                        RowLayout {
+                            visible: routinesRoot.isScaleLikeTemplate(routinesRoot.configurableDescriptor)
+                            Layout.fillWidth: true
+                            spacing: Style.spacing.md
+                            Dropdown {
+                                Layout.preferredWidth: Style.space(110)
+                                label: "Key"
+                                options: root.service ? root.service.jamKeys() : []
+                                value: routinesRoot.cfgKey
+                                onChanged: function (value) { routinesRoot.cfgKey = value }
+                            }
+                            Dropdown {
+                                Layout.preferredWidth: Style.space(180)
+                                visible: routinesRoot.configurableDescriptor && routinesRoot.configurableDescriptor.positions.length > 1 && !routinesRoot.cfgDynamic
+                                label: "Position"
+                                options: (routinesRoot.configurableDescriptor ? routinesRoot.configurableDescriptor.positions : []).map(function (p) {
+                                    return { value: p, label: p === "all" ? "All" : "Box " + p.slice(3) }
+                                })
+                                value: routinesRoot.cfgPosition
+                                onChanged: function (value) { routinesRoot.cfgPosition = value }
+                            }
+                        }
+
+                        // ---- triad/hybrid-triad fields ----
+                        RowLayout {
+                            visible: routinesRoot.isTriadLikeTemplate(routinesRoot.configurableDescriptor)
+                            Layout.fillWidth: true
+                            spacing: Style.spacing.md
+                            Dropdown {
+                                Layout.preferredWidth: Style.space(90)
+                                label: "Root"
+                                options: root.service ? root.service.jamKeys() : []
+                                value: routinesRoot.cfgRoot
+                                onChanged: function (value) { routinesRoot.cfgRoot = value }
+                            }
+                            Dropdown {
+                                Layout.preferredWidth: Style.space(130)
+                                label: "Quality"
+                                options: ["major", "minor", "diminished", "augmented"]
+                                value: routinesRoot.cfgQuality
+                                onChanged: function (value) { routinesRoot.cfgQuality = value }
+                            }
+                            Dropdown {
+                                Layout.preferredWidth: Style.space(140)
+                                label: "Inversion"
+                                options: [{ value: "all", label: "All" }, { value: "root", label: "Root" }, { value: "first", label: "1st" }, { value: "second", label: "2nd" }]
+                                value: routinesRoot.cfgInversion
+                                onChanged: function (value) { routinesRoot.cfgInversion = value }
+                            }
+                            Dropdown {
+                                Layout.preferredWidth: Style.space(140)
+                                label: "String Set"
+                                options: [{ value: "all", label: "All" }, { value: "123", label: "1-2-3" }, { value: "234", label: "2-3-4" }, { value: "345", label: "3-4-5" }, { value: "456", label: "4-5-6" }]
+                                value: routinesRoot.cfgStringSet
+                                onChanged: function (value) { routinesRoot.cfgStringSet = value }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: Style.spacing.md
+                            NumberField { id: cfgBpmField; label: "BPM"; value: 90; from: 30; to: 300 }
+                            NumberField { id: cfgDurationField; label: "Duration (min)"; value: 6; from: 1; to: 30 }
+                            Toggle {
+                                id: cfgDynamicToggle
+                                label: "Dynamic"
+                                description: "Cycle automatically instead of a fixed position/inversion"
+                                foreground: Color.foreground
+                                accent: Color.accent
+                                onClicked: { cfgDynamicToggle.checked = !cfgDynamicToggle.checked; routinesRoot.cfgDynamic = cfgDynamicToggle.checked }
+                            }
+                            NumberField { id: cfgDynamicSecondsField; visible: routinesRoot.cfgDynamic; label: "Every (seconds)"; value: 90; from: 15; to: 600 }
+                        }
+
+                        Text {
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: routinesRoot.configurableDescriptor ? routinesRoot.configurableDescriptor.description || "" : ""
+                            color: Color.foreground; opacity: 0.7
+                            font.family: Style.font.family; font.pixelSize: Style.font.caption
+                        }
+
+                        PracticeVisual {
+                            visible: !!routinesRoot.configurablePreviewItem
+                            Layout.fillWidth: true
+                            item: routinesRoot.configurablePreviewItem
+                            board: root.previewBoard(routinesRoot.configurablePreviewItem)
+                            stringLabels: root.previewStringLabels(routinesRoot.configurablePreviewItem)
+                            toneData: root.previewToneData(routinesRoot.configurablePreviewItem)
+                            voicings: root.previewVoicings(routinesRoot.configurablePreviewItem)
+                            fretWindow: root.previewFretWindow(routinesRoot.configurablePreviewItem)
+                            showFretboard: root.previewShowsFretboard(routinesRoot.configurablePreviewItem)
+                            showChord: root.previewShowsChordDiagram(routinesRoot.configurablePreviewItem)
+                        }
+
+                        Text {
+                            visible: routinesRoot.configurablePreviewItem && routinesRoot.configurablePreviewItem.stages
+                            Layout.fillWidth: true
+                            wrapMode: Text.WordWrap
+                            text: routinesRoot.configurablePreviewItem && routinesRoot.configurablePreviewItem.stages
+                                ? "Dynamic — stages: " + routinesRoot.configurablePreviewItem.stages.map(function (s) { return s.label }).join(" → ") : ""
+                            color: Color.accent
+                            opacity: 0.85
+                            font.family: Style.font.family; font.pixelSize: Style.font.caption
+                        }
+                    }
+                }
+            }
+
+            RowLayout {
+                visible: root.service && routinesRoot.subMode === "configurable" ? !root.service.activeRoutine : false
+                Layout.fillWidth: true
+                Item { Layout.fillWidth: true }
+                Button {
+                    focusable: true; text: "Start Practice"; bordered: true
+                    foreground: Color.foreground; accent: Color.accent
+                    enabled: !!routinesRoot.configurableTemplateId
+                    onClicked: {
+                        if (!root.service || !routinesRoot.configurableTemplateId) return
+                        root.service.startConfiguredRoutine(routinesRoot.configurableTemplateId, routinesRoot.currentConfigurableConfig())
                     }
                 }
             }

@@ -5,6 +5,7 @@ import Quickshell.Io
 import "js/storage.js" as Storage
 import "js/metronome.js" as Metronome
 import "js/tempo_trainer.js" as Trainer
+import "js/stage_engine.js" as StageEngine
 import "js/pitch.js" as Pitch
 import "js/tunings.js" as Tunings
 import "js/theory.js" as Theory
@@ -15,6 +16,7 @@ import "js/routines.js" as Routines
 import "js/progress.js" as Progress
 import "js/exercises.js" as Exercises
 import "js/presets.js" as Presets
+import "js/jam_sessions.js" as JamSessions
 
 Item {
     id: service
@@ -158,6 +160,12 @@ Item {
             if (tempoTrainerActive && tempoTrainerPlan.incrementMode === "bars" && msg.beatIndex === 0 && msg.subIndex === 0) {
                 tempoTrainerBarCount += 1
             }
+            if (stageStages && stageRunning && stageAdvance && stageAdvance.mode === "bars" && msg.beatIndex === 0 && msg.subIndex === 0) {
+                stageBarCount += 1
+            }
+            if (jamActive && jamRunning && msg.beatIndex === 0 && msg.subIndex === 0) {
+                jamBarCount += 1
+            }
         } else if (msg.type === "status") {
             if (msg.mode === "metronome") metronomeRunning = !!msg.running
             else if (msg.mode === "drone") droneRunning = !!msg.running
@@ -173,6 +181,7 @@ Item {
 
     function startMetronome() {
         if (droneRunning) stopDrone()
+        if (jamActive) stopJam()
         sendAudio({ cmd: "start", mode: "metronome", bpm: metronomeBpm, timeSignatureId: timeSignatureId, subdivisionId: subdivisionId, volume: metronomeVolume })
     }
 
@@ -232,6 +241,7 @@ Item {
     function startDrone() {
         if (metronomeRunning) stopMetronome()
         if (tempoTrainerActive) stopTempoTrainer()
+        if (jamActive) stopJam()
         sendAudio({ cmd: "start", mode: "drone", frequency: frequencyForDrone(droneNote, droneOctave), volume: metronomeVolume })
     }
 
@@ -318,6 +328,74 @@ Item {
         }
     }
 
+    // ------------------------------------------------------------ dynamic stage engine (v0.4)
+    // Drives an optional per-item stage sequence (js/routines.js's
+    // hasStages/resolveStageItem, js/stage_engine.js). Generic by design so
+    // a v0.5 Jam Session can reuse it for chord-change timing later - this
+    // block knows nothing about scales/triads/BPM, only "which index, when".
+    property var stageStages: null
+    property var stageAdvance: null
+    property int stageIndex: 0
+    property double stageElapsedMs: 0
+    property double stageResumedAt: 0
+    property int stageBarCount: 0
+    property bool stageRunning: false
+
+    function stageElapsedSeconds() {
+        var extra = stageRunning ? (Date.now() - stageResumedAt) : 0
+        return (stageElapsedMs + extra) / 1000
+    }
+
+    Timer {
+        id: stageTicker
+        interval: 250
+        repeat: true
+        running: service.stageStages !== null && service.stageRunning
+        onTriggered: service.evaluateStageProgression()
+    }
+
+    function evaluateStageProgression() {
+        if (!stageStages || !stageStages.length) return
+        var next = StageEngine.autoStageIndex(stageStages, stageAdvance, stageElapsedSeconds(), stageBarCount)
+        if (next !== stageIndex) setStageIndex(next)
+    }
+
+    function setStageIndex(index) {
+        stageIndex = StageEngine.clampIndex(stageStages, index)
+        var base = activeBaseItem()
+        if (base) applyToneAndMetronome(Routines.resolveStageItem(base, stageIndex), true)
+    }
+
+    // Manual Previous/Next: rebases the running elapsed-time/bar-count clock
+    // so automatic progression continues naturally from the new position
+    // instead of immediately overriding it back on the next tick.
+    function goToStage(index) {
+        if (!stageStages) return
+        var clamped = StageEngine.clampIndex(stageStages, index)
+        if (stageAdvance && stageAdvance.mode === "bars") {
+            stageBarCount = StageEngine.stageStartBars(stageAdvance, clamped)
+        } else {
+            stageElapsedMs = StageEngine.stageStartElapsedSeconds(stageAdvance, clamped) * 1000
+            stageResumedAt = Date.now()
+        }
+        setStageIndex(clamped)
+    }
+
+    function nextStage() { if (stageStages) goToStage(stageIndex + 1) }
+    function previousStage() { if (stageStages) goToStage(stageIndex - 1) }
+
+    function pauseStageProgression() {
+        if (!stageStages || !stageRunning) return
+        stageElapsedMs += Date.now() - stageResumedAt
+        stageRunning = false
+    }
+
+    function resumeStageProgression() {
+        if (!stageStages || stageRunning) return
+        stageResumedAt = Date.now()
+        stageRunning = true
+    }
+
     // ------------------------------------------------------------ practice timer
     property int practiceTimerTotalSeconds: 0
     property int practiceTimerRemainingSeconds: 0
@@ -334,8 +412,14 @@ Item {
         if (practiceTimerLinkMetronome && !metronomeRunning) startMetronome()
     }
 
-    function pausePracticeTimer() { practiceTimerRunning = false }
-    function resumePracticeTimer() { if (practiceTimerRemainingSeconds > 0) practiceTimerRunning = true }
+    function pausePracticeTimer() {
+        practiceTimerRunning = false
+        pauseStageProgression()
+    }
+    function resumePracticeTimer() {
+        if (practiceTimerRemainingSeconds > 0) practiceTimerRunning = true
+        resumeStageProgression()
+    }
 
     function resetPracticeTimer() {
         practiceTimerRemainingSeconds = practiceTimerTotalSeconds
@@ -600,6 +684,7 @@ Item {
 
     function startRoutineObject(routine) {
         if (!routine || routine.items.length === 0) return
+        if (jamActive) stopJam()
         activeRoutine = routine
         activeRun = Routines.startRun(routine)
         applyRoutineItem(Routines.currentItem(routine, activeRun))
@@ -618,6 +703,133 @@ Item {
     function presetCategories() { return Presets.PRESET_CATEGORIES }
     function presetsByCategory(category) { return Presets.presetsByCategory(category) }
     function presetById(id) { return Presets.presetById(id) }
+
+    // ------------------------------------------------------------ configurable routine templates (v0.5)
+    //
+    // A template is picked and *configured* (key/root/position/BPM/
+    // duration/dynamic) at selection time instead of shipping one fixed
+    // preset per key/box/quality combination. Triad-shape resolution needs
+    // VisualShapes.triadShapes, which js/presets.js cannot import (see that
+    // file's header) - this glue lives here, exactly like activeVisualBoard()
+    // already combines Presets/VisualShapes/Theory for the same reason.
+    // A configured routine is never persisted: it resolves to one ordinary
+    // (optionally dynamic/staged) item, wrapped in a throwaway routine and
+    // run through the existing startRoutineObject/activeRoutine machinery
+    // unchanged - including the v0.4 stage engine when dynamic is enabled.
+
+    readonly property var configurableTemplateIndex: Presets.SCALE_TEMPLATES.map(function (t) {
+        return { id: t.id, name: t.name, category: t.category, kind: "scale", positions: t.positions }
+    }).concat([
+        { id: Presets.HYBRID_PENTATONIC_TEMPLATE.id, name: Presets.HYBRID_PENTATONIC_TEMPLATE.name, category: Presets.HYBRID_PENTATONIC_TEMPLATE.category, kind: "hybrid-pentatonic", positions: ["all", "box1", "box2", "box3", "box4", "box5"] },
+        { id: "template-triad", name: "Configurable Triad", category: "Triads", kind: "triad" },
+        { id: "template-hybrid-triad", name: "Hybrid Picking — Triad", category: "Technique", kind: "hybrid-triad" }
+    ])
+
+    function configurableCategories() {
+        var seen = {}
+        var list = []
+        for (var i = 0; i < configurableTemplateIndex.length; i++) {
+            var category = configurableTemplateIndex[i].category
+            if (!seen[category]) { seen[category] = true; list.push(category) }
+        }
+        return list
+    }
+
+    function configurableTemplatesByCategory(category) {
+        return configurableTemplateIndex.filter(function (t) { return t.category === category })
+    }
+
+    function configurableTemplateById(id) {
+        for (var i = 0; i < configurableTemplateIndex.length; i++) if (configurableTemplateIndex[i].id === id) return configurableTemplateIndex[i]
+        return null
+    }
+
+    function triadQualityLabel(quality) {
+        return { major: "Major", minor: "Minor", diminished: "Diminished", augmented: "Augmented" }[quality] || quality
+    }
+
+    function resolveTriadTemplateItem(config, hybrid) {
+        var c = config || {}
+        var root = Presets.TRIAD_ROOTS.indexOf(c.root) >= 0 ? c.root : "A"
+        var quality = Presets.TRIAD_QUALITIES.indexOf(c.quality) >= 0 ? c.quality : "major"
+        var inversion = Presets.TRIAD_INVERSION_IDS.indexOf(c.inversion) >= 0 ? c.inversion : "root"
+        var stringSet = Presets.TRIAD_STRING_SET_IDS.indexOf(c.stringSet) >= 0 ? c.stringSet : "123"
+        var targetBpm = c.targetBpm || 70
+        var durationMinutes = c.durationMinutes || 4
+        var dynamic = !!c.dynamic
+        var everySeconds = Math.max(15, c.dynamicEverySeconds || 80)
+        var rootPitchClass = Theory.pitchClassIndex(root)
+
+        function shapePositions(inv, set) {
+            var shapes = VisualShapes.triadShapes(rootPitchClass, quality, inv, set, 0, 15)
+            return shapes.length ? shapes[0].positions : null
+        }
+        function visualFor(inv, set) {
+            var positions = shapePositions(inv, set)
+            if (!positions) return null
+            return hybrid ? Presets.pathAid("hybrid-triad-template-" + inv + "-" + set, positions, ["P", "M", "R"], "PICKING_PATTERN")
+                : Presets.triadAid("triad-template-" + inv + "-" + set, positions)
+        }
+        function stageLabel(inv, set, cyclingInversions) {
+            return cyclingInversions ? Presets.triadInversionLabel(inv) : Presets.triadStringSetLabel(set)
+        }
+
+        var qualityLabel = triadQualityLabel(quality)
+        var base = {
+            type: hybrid ? "technique" : "chord_changes",
+            label: root + " " + qualityLabel + (hybrid ? " Hybrid Picking Triad" : " Triad"),
+            durationMinutes: durationMinutes,
+            targetBpm: targetBpm,
+            metronome: { timeSignatureId: "4-4", subdivisionId: "quarter" },
+            notes: hybrid
+                ? "Pick handles the lowest string of the set, middle and ring take the other two, together."
+                : ("Standard tuning, " + root + " " + qualityLabel.toLowerCase() + " triad."),
+            chordKey: { key: root, chordId: quality },
+            tuningId: "standard"
+        }
+
+        if (dynamic && (inversion === "all" || stringSet === "all")) {
+            var cyclingInversions = inversion === "all"
+            var fixedSet = stringSet === "all" ? "123" : stringSet
+            var fixedInversion = inversion === "all" ? "root" : inversion
+            var sequence = cyclingInversions ? ["root", "first", "second"] : ["123", "234", "345", "456"]
+            base.stages = sequence.map(function (value) {
+                var inv = cyclingInversions ? value : fixedInversion
+                var set = cyclingInversions ? fixedSet : value
+                return Presets.stage(stageLabel(inv, set, cyclingInversions), { visualAid: visualFor(inv, set) })
+            })
+            base.advance = { mode: "time", everySeconds: everySeconds }
+            base.durationMinutes = base.stages.length * everySeconds / 60
+            base.visualAid = base.stages[0].visualAid
+        } else {
+            var resolvedInversion = inversion === "all" ? "root" : inversion
+            var resolvedSet = stringSet === "all" ? "123" : stringSet
+            base.visualAid = visualFor(resolvedInversion, resolvedSet)
+        }
+
+        return Routines.createItem(base)
+    }
+
+    // config shape varies by template kind:
+    //  scale/hybrid-pentatonic: { key, position, targetBpm, durationMinutes,
+    //    metronomeEnabled, dynamic, dynamicEverySeconds }
+    //  triad/hybrid-triad: { root, quality, inversion, stringSet, targetBpm,
+    //    durationMinutes, dynamic, dynamicEverySeconds }
+    function resolveConfigurableRoutine(templateId, config) {
+        var descriptor = configurableTemplateById(templateId)
+        if (!descriptor) return null
+        if (descriptor.kind === "scale") return Presets.resolveScaleTemplate(templateId, config)
+        if (descriptor.kind === "hybrid-pentatonic") return Presets.resolveHybridPentatonicTemplate(config)
+        if (descriptor.kind === "triad") return resolveTriadTemplateItem(config, false)
+        if (descriptor.kind === "hybrid-triad") return resolveTriadTemplateItem(config, true)
+        return null
+    }
+
+    function startConfiguredRoutine(templateId, config) {
+        var item = resolveConfigurableRoutine(templateId, config)
+        if (!item) return
+        startRoutineObject(Routines.createRoutine(item.label, [item]))
+    }
 
     function setRoutineBrowserSource(source) {
         var normalized = source === "mine" ? "mine" : "presets"
@@ -643,39 +855,72 @@ Item {
         requestSave()
     }
 
-    function applyRoutineItem(item) {
-        if (!item) return
-        if (item.tuningId) setTuning(item.tuningId)
-        if (item.scaleKey) {
-            setReferenceKey(item.scaleKey.key || referenceKey)
-            setReferenceScale(item.scaleKey.scaleId || referenceScaleId)
-        } else if (item.chordKey) {
-            setReferenceKey(item.chordKey.key || referenceKey)
-            setReferenceChord(item.chordKey.chordId || referenceChordId)
+    // Shared by applyRoutineItem (item transition) and setStageIndex (stage
+    // transition within one dynamic item): applies tuning/reference/
+    // metronome/BPM for `effective`, the item that should actually be heard
+    // and displayed right now. Never touches the practice timer or session
+    // bookkeeping, which operate at the item level, not the stage level.
+    function applyToneAndMetronome(effective, dynamic) {
+        if (effective.tuningId) setTuning(effective.tuningId)
+        if (effective.scaleKey) {
+            setReferenceKey(effective.scaleKey.key || referenceKey)
+            setReferenceScale(effective.scaleKey.scaleId || referenceScaleId)
+        } else if (effective.chordKey) {
+            setReferenceKey(effective.chordKey.key || referenceKey)
+            setReferenceChord(effective.chordKey.chordId || referenceChordId)
         }
-        if (item.metronome) {
-            if (item.metronome.timeSignatureId) setTimeSignature(item.metronome.timeSignatureId)
-            if (item.metronome.subdivisionId) setSubdivision(item.metronome.subdivisionId)
+        if (effective.metronome) {
+            if (effective.metronome.timeSignatureId) setTimeSignature(effective.metronome.timeSignatureId)
+            if (effective.metronome.subdivisionId) setSubdivision(effective.metronome.subdivisionId)
         }
-        if (item.targetBpm && item.metronome && item.metronome.startBpm) {
+        // A dynamic item's own stage progression is the single authority for
+        // its BPM/subdivision changes - it never also starts a tempo-trainer
+        // ramp, which would be a second, conflicting progression clock.
+        if (effective.targetBpm && effective.metronome && effective.metronome.startBpm && !dynamic) {
             startTempoTrainer({
-                startBpm: item.metronome.startBpm, targetBpm: item.targetBpm,
-                incrementBpm: item.metronome.incrementBpm || 5,
-                incrementMode: item.metronome.incrementMode || "time",
-                intervalSeconds: item.metronome.intervalSeconds || 120,
-                intervalBars: item.metronome.intervalBars || 8
+                startBpm: effective.metronome.startBpm, targetBpm: effective.targetBpm,
+                incrementBpm: effective.metronome.incrementBpm || 5,
+                incrementMode: effective.metronome.incrementMode || "time",
+                intervalSeconds: effective.metronome.intervalSeconds || 120,
+                intervalBars: effective.metronome.intervalBars || 8
             })
-        } else if (item.targetBpm) {
-            setMetronomeBpm(item.targetBpm)
+        } else if (effective.targetBpm) {
+            setMetronomeBpm(effective.targetBpm)
+            if (!metronomeRunning) startMetronome()
+        } else if (dynamic && effective.metronome && !metronomeRunning) {
             startMetronome()
         }
+    }
+
+    function applyRoutineItem(item) {
+        if (!item) return
+        var dynamic = Routines.hasStages(item)
+        stageStages = dynamic ? item.stages : null
+        stageAdvance = dynamic ? item.advance : null
+        stageIndex = 0
+        stageElapsedMs = 0
+        stageResumedAt = Date.now()
+        stageBarCount = 0
+        stageRunning = dynamic
+        applyToneAndMetronome(dynamic ? Routines.resolveStageItem(item, 0) : item, dynamic)
         if (item.durationMinutes) startPracticeTimer(item.durationMinutes * 60, false)
         routineAwaitingOutcome = false
     }
 
-    function activeItem() {
+    function activeBaseItem() {
         if (!activeRoutine || !activeRun) return null
         return Routines.currentItem(activeRoutine, activeRun)
+    }
+
+    // The item actually shown/played right now: a dynamic item's current
+    // stage resolved on top of it, or the plain item unchanged. Every
+    // existing consumer (visual aid, fret window, chord voicings, tone data,
+    // label/notes in the UI) reads through this one function, so dynamic
+    // routines need no changes anywhere else.
+    function activeItem() {
+        var base = activeBaseItem()
+        if (!base) return null
+        return Routines.hasStages(base) ? Routines.resolveStageItem(base, stageIndex) : base
     }
 
     function activeNextItem() {
@@ -761,6 +1006,10 @@ Item {
         stopTempoTrainer()
         resetPracticeTimer()
         practiceTimerTotalSeconds = 0
+        stageStages = null
+        stageAdvance = null
+        stageIndex = 0
+        stageRunning = false
         activeRun = Routines.advance(activeRoutine, activeRun)
         if (activeRun.completed) {
             recordSession({
@@ -780,9 +1029,25 @@ Item {
         stopMetronome()
         stopTempoTrainer()
         resetPracticeTimer()
+        stageStages = null
+        stageAdvance = null
+        stageIndex = 0
+        stageRunning = false
         activeRoutine = null
         activeRun = null
         routineAwaitingOutcome = false
+    }
+
+    // ------------------------------------------------------------ dynamic stage display helpers
+    function activeStageCount() { return stageStages ? stageStages.length : 0 }
+    function activeStageIsDynamic() { return !!stageStages }
+    function activeStageSecondsRemaining() {
+        if (!stageStages || !stageAdvance || stageAdvance.mode !== "time") return null
+        return Math.ceil(StageEngine.stageSecondsRemaining(stageStages, stageAdvance, stageElapsedSeconds()))
+    }
+    function activeStageLabels() {
+        if (!stageStages) return []
+        return stageStages.map(function (s) { return s.label || "" })
     }
 
     // A tempo-tracked item (one with a targetBpm) asks Clean/Nearly/Needs
@@ -800,6 +1065,190 @@ Item {
         if (item && item.targetBpm) recordExerciseOutcome(item.id, metronomeBpm, outcome)
         routineAwaitingOutcome = false
         advanceRoutine()
+    }
+
+    // ------------------------------------------------------------ Jam Sessions (v0.5)
+    //
+    // A local, generated backing track: a chord progression drives the same
+    // js/stage_engine.js used by v0.4 dynamic practice routines (one stage
+    // per chord, bar-based advance), except the sequence *loops* for the
+    // whole session instead of holding at the last chord - see
+    // StageEngine's loopedAutoStageIndex/loopedStageBarsRemaining. The
+    // audio helper's existing "metronome" click is replaced by a generated
+    // bass/comp/drums render (helper/audio_engine.py's "jam" mode) driven by
+    // the same bar-start beat messages that already feed stageBarCount.
+    property bool jamActive: false
+    property var jamStyleId: null
+    property string jamKey: "A"
+    property int jamTempo: 100
+    property var jamStages: null
+    property var jamAdvance: null
+    property var jamParentScaleId: null
+    property int jamStageIndex: 0
+    property int jamBarCount: 0
+    property double jamElapsedMs: 0
+    property double jamResumedAt: 0
+    property bool jamRunning: false
+    property int jamTotalSeconds: 0
+    property double jamStartedAt: 0
+
+    function jamGenres() { return JamSessions.genres() }
+    function jamStylesByGenre(genre) { return JamSessions.stylesByGenre(genre) }
+    function jamStyleById(id) { return JamSessions.styleById(id) }
+    function jamKeys() { return JamSessions.keys() }
+
+    function jamElapsedSeconds() {
+        var extra = jamRunning ? (Date.now() - jamResumedAt) : 0
+        return (jamElapsedMs + extra) / 1000
+    }
+
+    function jamRemainingSeconds() {
+        if (!jamActive || jamTotalSeconds <= 0) return 0
+        return Math.max(0, jamTotalSeconds - Math.floor(jamElapsedSeconds()))
+    }
+
+    function startJam(styleId, key, tempo, durationMinutes) {
+        var resolved = JamSessions.resolveProgression(styleId, key)
+        if (!resolved) return
+        stopMetronome()
+        if (droneRunning) stopDrone()
+        if (tempoTrainerActive) stopTempoTrainer()
+        if (activeRoutine) stopRoutine()
+
+        jamStyleId = styleId
+        jamKey = resolved.keyName
+        jamTempo = Metronome.clampBpm(tempo || resolved.style.defaultTempo)
+        jamStages = resolved.stages
+        jamAdvance = resolved.advance
+        jamParentScaleId = resolved.parentScaleId
+        jamStageIndex = 0
+        jamBarCount = 0
+        jamElapsedMs = 0
+        jamResumedAt = Date.now()
+        jamStartedAt = jamResumedAt
+        jamRunning = true
+        jamTotalSeconds = Math.max(60, Math.round((durationMinutes || 10) * 60))
+        jamActive = true
+
+        setTimeSignature(resolved.style.defaultTimeSignatureId)
+        var first = jamStages[0]
+        sendAudio({
+            cmd: "start", mode: "jam", bpm: jamTempo, timeSignatureId: resolved.style.defaultTimeSignatureId,
+            chordRoot: first.rootPitchClass, chordQuality: first.quality, feel: resolved.style.feel, volume: metronomeVolume
+        })
+    }
+
+    function pauseJam() {
+        if (!jamActive || !jamRunning) return
+        jamElapsedMs += Date.now() - jamResumedAt
+        jamRunning = false
+        sendAudio({ cmd: "stop" })
+    }
+
+    function resumeJam() {
+        if (!jamActive || jamRunning || jamRemainingSeconds() <= 0) return
+        jamResumedAt = Date.now()
+        jamRunning = true
+        var current = jamStages[jamStageIndex]
+        sendAudio({ cmd: "start", mode: "jam", bpm: jamTempo, chordRoot: current.rootPitchClass, chordQuality: current.quality, volume: metronomeVolume })
+    }
+
+    function stopJam() {
+        if (jamActive) {
+            var style = jamStyleById(jamStyleId)
+            recordSession({
+                startedAt: jamStartedAt,
+                durationMinutes: Math.max(1, Math.round(jamElapsedSeconds() / 60)),
+                routineName: "Jam: " + (style ? style.label : "") + " in " + jamKey
+            })
+        }
+        sendAudio({ cmd: "stop" })
+        jamActive = false
+        jamRunning = false
+        jamStages = null
+        jamAdvance = null
+        jamStageIndex = 0
+    }
+
+    function setJamTempo(bpm) {
+        jamTempo = Metronome.clampBpm(bpm)
+        if (jamActive) sendAudio({ cmd: "update", mode: "jam", bpm: jamTempo })
+    }
+
+    function adjustJamTempo(delta) { setJamTempo(Metronome.adjustBpm(jamTempo, delta)) }
+
+    Timer {
+        id: jamTicker
+        interval: 250
+        repeat: true
+        running: service.jamActive && service.jamRunning
+        onTriggered: service.evaluateJamProgression()
+    }
+
+    function evaluateJamProgression() {
+        if (!jamActive || !jamStages || !jamStages.length) return
+        if (jamRemainingSeconds() <= 0) { stopJam(); return }
+        var next = StageEngine.loopedAutoStageIndex(jamStages, jamAdvance, jamElapsedSeconds(), jamBarCount)
+        if (next !== jamStageIndex) {
+            jamStageIndex = next
+            var stageObj = jamStages[jamStageIndex]
+            sendAudio({ cmd: "update", mode: "jam", chordRoot: stageObj.rootPitchClass, chordQuality: stageObj.quality })
+        }
+    }
+
+    function activeJamStage() {
+        if (!jamActive || !jamStages || !jamStages.length) return null
+        return jamStages[jamStageIndex]
+    }
+
+    function activeJamNextStage() {
+        if (!jamActive || !jamStages || !jamStages.length) return null
+        return jamStages[(jamStageIndex + 1) % jamStages.length]
+    }
+
+    function jamBarsRemainingInStage() {
+        if (!jamActive || !jamStages) return 0
+        return Math.ceil(StageEngine.loopedStageBarsRemaining(jamStages, jamAdvance, jamBarCount))
+    }
+
+    function jamTotalBars() {
+        if (!jamActive || !jamStages) return 0
+        return jamStages.length * (jamAdvance ? jamAdvance.everyBars : 1)
+    }
+
+    function jamCurrentBarNumber() {
+        if (!jamActive || !jamStages || !jamAdvance) return 0
+        var everyBars = jamAdvance.everyBars
+        var barsIntoStage = everyBars - jamBarsRemainingInStage()
+        return jamStageIndex * everyBars + Math.max(1, barsIntoStage + 1)
+    }
+
+    // Fretboard guidance: current chord tones emphasized, with the tonic
+    // blues/pentatonic scale kept visible as context for Blues styles
+    // (reusing the existing verified scale-membership engine, not a new
+    // chord-scale theory claim) - jazz styles show chord-tone membership
+    // only, matching "don't overpromise theory guidance".
+    function jamFretboardBoard() {
+        var stageObj = activeJamStage()
+        if (!stageObj) return null
+        var board = Fretboard.buildFretboard(currentTuning().notes, fretCount)
+        var chordSet = {}
+        var intervals = { major: [0, 4, 7], minor: [0, 3, 7], dominant7: [0, 4, 7, 10],
+            major7: [0, 4, 7, 11], minor7: [0, 3, 7, 10], minor7b5: [0, 3, 6, 10], diminished7: [0, 3, 6, 9] }[stageObj.quality] || [0, 4, 7]
+        for (var i = 0; i < intervals.length; i++) chordSet[(stageObj.rootPitchClass + intervals[i]) % 12] = true
+
+        if (jamParentScaleId) {
+            var scale = Theory.buildScale(jamKey, jamParentScaleId)
+            if (scale) {
+                var scaleSet = Theory.pitchClassSet(scale.notes)
+                var chordCells = []
+                for (var s = 0; s < board.strings.length; s++)
+                    for (var f = 0; f < board.strings[s].length; f++)
+                        if (chordSet[board.strings[s][f].pitchClass]) chordCells.push([s, f])
+                return VisualShapes.highlightContext(board, scaleSet, scale.rootPitchClass, chordCells, [])
+            }
+        }
+        return Fretboard.highlightFretboard(board, chordSet, stageObj.rootPitchClass)
     }
 
     // ------------------------------------------------------------ exercises / progress

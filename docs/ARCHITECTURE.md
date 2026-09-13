@@ -190,6 +190,141 @@ that scheme across four fairly dense section views was judged not worth it for t
 build. `ButtonGroup`'s own Left/Right/h/l + Enter/Space handling still works once Tab
 reaches it, and Escape closes the panel from a plain `Keys.onEscapePressed`.
 
+## Dynamic/staged practice routines (v0.4)
+
+A practice item can now carry an optional `stages`/`advance` pair
+(`js/routines.js`'s `createItem`, `hasStages`, `resolveStageItem`). Each
+stage is a partial *patch* of the same fields a static item already has
+(`label`, `notes`, `visualAid`, `scaleKey`, `chordKey`, `metronome`,
+`targetBpm`, `fretWindow`, `pattern`) - `resolveStageItem(item, stageIndex)`
+overlays the active stage's patch onto the base item (shallow-merging
+`metronome` so a stage can change just `subdivisionId` while keeping the
+base item's `timeSignatureId`/`startBpm`) and returns an ordinary,
+non-dynamic item. Every existing consumer of "the active item" - the
+fretboard/chord visual, fret window, chord voicings, tone data, label and
+notes shown in the UI - reads through `Service.qml`'s `activeItem()`, which
+now resolves the current stage transparently. This is the reason no other
+render-layer code needed to change: a dynamic routine is invisible to
+everything downstream of `activeItem()`.
+
+`js/stage_engine.js` decides *when* the active stage changes, and is
+deliberately ignorant of what a stage contains - it only ever sees a stage
+count and an `{ mode: "time", everySeconds }` or `{ mode: "bars", everyBars
+}` plan, mirroring `js/tempo_trainer.js`'s existing elapsed-seconds/
+completed-bars authority so stage progression rides the same real clock
+already used for BPM ramps, not a UI animation `Timer`. `Service.qml` owns
+the runtime state (`stageStages`, `stageAdvance`, `stageIndex`,
+`stageElapsedMs`/`stageResumedAt` for the paused-aware elapsed clock,
+`stageBarCount` incremented from the same bar-start audio-beat message that
+already drives `tempoTrainerBarCount`) and ticks `evaluateStageProgression()`
+every 250ms exactly like `evaluateTempoTrainer()`. Manual Previous/Next
+(`nextStage`/`previousStage`/`goToStage`) *rebases* the elapsed-time or
+bar-count clock to the target stage's start instead of just overwriting the
+index, so automatic progression resumes naturally from the new position on
+the next tick rather than snapping back. Pausing the practice timer
+(`pausePracticeTimer`/`resumePracticeTimer`) also pauses/resumes stage
+progression, so a dynamic routine has exactly one pause control, matching
+the existing practice-timer semantics rather than adding a second one.
+
+A dynamic item is still exactly one routine item: `advanceRoutine`'s
+existing session bookkeeping is untouched, so a whole dynamic routine still
+records as one `sessions` history row, not one per stage. A dynamic item
+never also runs `startTempoTrainer` - its own stage progression is the
+single authority for any BPM/subdivision change it makes, avoiding two
+independent progression clocks fighting over the same metronome state.
+
+This engine is deliberately generic (see `js/stage_engine.js`'s module
+comment) so a v0.5 Jam Session can reuse it for chord-change timing: a
+12-bar-blues "stage" would just be `{ label: "I7", chordKey: {...},
+visualAid: {...} }` advancing every N bars, the same shape a pentatonic-box
+or triad-inversion stage already uses today.
+
+## Configurable routine templates (v0.5)
+
+v0.4 shipped one preset per key/box/quality combination (e.g. "Minor
+Pentatonic - Box 1"). v0.5 adds a second, parallel kind of built-in content -
+a *template* - selected and configured (key/root, position/inversion/string
+set, BPM, duration, metronome, dynamic on/off) at the moment the user picks
+it, rather than shipping a preset per combination. A configured template
+resolves to one ordinary `createItem`-shaped item (optionally with v0.4's
+`stages`/`advance` when dynamic is on) and is never persisted itself - the
+caller wraps it in a throwaway `Routines.createRoutine(name, [item])` and
+runs it through the existing `startRoutineObject`/`activeRoutine` machinery
+completely unchanged. Both kinds of content remain selectable side by side
+("Practice Sessions" / "My Routines" / "Configurable" in the Routines
+source switch) - templates do not replace or remove any existing preset.
+
+`js/presets.js`'s `SCALE_TEMPLATES` + `resolveScaleTemplate` cover scales
+(Minor/Major Pentatonic, Blues, Major, Natural Minor, Dorian, Mixolydian):
+position choices are limited to `boxAid`'s already-audited, root-
+transposable pentatonic-box coordinates - a scale with no verified box shape
+(major pentatonic, blues, the diatonic modes) only ever offers "all"
+(full-fretboard membership) rather than a fabricated position. The same file
+resolves the configurable hybrid-pentatonic template. Triad configuration
+(root/quality/inversion/string set) needs `js/visual_shapes.js`'s
+`triadShapes()` - unused by any content before v0.5 - which `presets.js`
+cannot import (see this file's "small local duplication over cross-file
+coupling" note above), so that resolution lives in `Service.qml`
+(`resolveTriadTemplateItem`), which already imports both modules for exactly
+this reason elsewhere (`activeVisualBoard()`). `presets.js` still owns the
+shared, testable descriptor lists (`TRIAD_ROOTS`/`TRIAD_QUALITIES`/
+`TRIAD_INVERSION_IDS`/`TRIAD_STRING_SET_IDS` and their label lookups) so the
+UI and `Service.qml` agree on valid option ids without duplicating them.
+
+## Jam Sessions (v0.5)
+
+A local, generated backing track: a chord progression (`js/jam_sessions.js`)
+drives the *same* `stages`/`advance` engine v0.4 introduced for dynamic
+practice routines - one stage per chord, `{ mode: "bars", everyBars: N }`
+advance so a chord change always lands on a barline regardless of BPM -
+except the sequence *loops* for the session's whole duration instead of
+holding at the last chord like a practice routine does. `js/stage_engine.js`
+gained `loopedAutoStageIndex`/`loopedStageBarsRemaining`/`completedCycles`
+for this (same clock, `%` instead of clamping) rather than a second
+sequencing engine. `Service.qml` owns the runtime state and bar counting
+from the same bar-start audio-beat message that already feeds v0.4's
+`stageBarCount`/`tempoTrainerBarCount`.
+
+Progressions are authored in `js/jam_sessions.js` in Roman-numeral-relative
+form (a scale-degree semitone offset from the key, plus a chord quality) so
+one definition transposes to any of the 12 keys by arithmetic - no per-key
+duplication. 8 styles ship: Major/Minor/Shuffle/Slow Blues (the latter two
+reuse the major-blues progression, differing only in tempo/feel) and Major
+ii-V-I/Minor ii-V-i/Jazz Blues/Dorian Vamp. Chord qualities are a small
+local interval table (major/minor/dominant7/major7/minor7/minor7b5/
+diminished7) kept out of `js/theory.js`'s `CHORDS` deliberately: that list
+is guitar-voicing-oriented (`tests/canonical_music.test.mjs` requires every
+entry to resolve to an audited, playable shape in every root via
+`js/chord_voicings.js`), while a Jam chord only ever needs a pitch-class set
+for fretboard-tone highlighting, not an exact diagram - see
+`docs/MUSIC_CONTENT_AUDIT.md` for progression sourcing.
+
+Backing audio is generated locally, never a sample or a copied recording:
+`helper/audio_engine.py` gained a third playback mode, `"jam"`, alongside
+the existing `"metronome"`/`"drone"` modes, using the same sample-accurate,
+audio-clock-paced chunked-write loop (see "Why a local helper process for
+audio" above) rather than a second audio process. Per-tick note/rhythm
+decisions (which eighth-note ticks carry the bass note vs. a chord-comp stab
+vs. a hi-hat, a simple "boom-chick" bass pattern, and the shuffle/swing
+timing offset applied only to off-beat ticks) are pure functions in
+`helper/jam_synth.py`, unit tested independently of the process/PCM-mixing
+code exactly like `helper/click_schedule.py` already is for the metronome;
+`jam_synth.py`'s swing-offset math is entirely separate from
+`click_schedule.py`, so ordinary metronome timing is provably unaffected.
+Kick/snare/hi-hat are synthesized (a pitch-dropping sine sweep, decaying
+white noise) rather than sampled - deliberately simple, lightweight
+accompaniment, not DAW-quality drums.
+
+Fretboard guidance highlights the current chord's tones; for Blues styles
+(which stay in one key/scale for the whole progression) the tonic blues/
+minor-pentatonic scale is also shown as context, reusing `Theory.buildScale`
++ `VisualShapes.highlightContext` exactly as v0.3.4's scale/box context view
+already does - no new chord-scale theory claim is made for Jazz styles,
+which show chord-tone membership only.
+
+No new network/cloud/privileged dependency was introduced; the audio helper
+remains a stdio-only local subprocess.
+
 ## A hot-reload gotcha worth knowing
 
 Saving a file under `~/.config/omarchy/plugins/<id>/` live-reloads that plugin's QML

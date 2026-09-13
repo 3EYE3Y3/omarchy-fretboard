@@ -2,13 +2,12 @@
 
 **Your guitar practice room, built into the Omarchy bar.**
 
-![Fretboard showing the Minor Pentatonic Box 1 guided practice session](preview.png)
+![Fretboard running a Shuffle Blues Jam Session in A, current chord and fretboard guidance visible](preview.png)
 
 Fretboard brings the tools you actually use while practising guitar into one focused
-Omarchy panel.
-
-Tune up, start a metronome, choose from 40 guided practice sessions, explore scales
-and chords across the fretboard, build your own routines, and track your progress.
+Omarchy panel: configurable guided practice, dynamic routines that advance
+themselves, hybrid-picking drills, local Blues/Jazz Jam Sessions, and the metronome,
+tuner and reference you'd expect - all local, all offline.
 
 **No account. No cloud. No telemetry. Just pick up your guitar and practise.**
 
@@ -16,17 +15,34 @@ Requires Omarchy 4.0.3 or later.
 
 ## Guided practice
 
-The 40 built-in sessions cover Warmups, Scales, Scale Patterns, Triads, Chords,
-Technique, and Rhythm. Pick a category and routine from compact selectors, then get
-one focused lesson with a useful visual, clear instructions, suggested tempo, and
-duration. Start it and the visual stays on screen while you play.
+57 built-in practice sessions across Warmups, Scales, Scale Patterns, Triads,
+Chords, Technique, and Rhythm, plus **configurable routine templates**: pick Minor
+Pentatonic, another scale, or a triad shape, then choose the key/root, position or
+inversion, tempo, duration, and whether it should progress automatically. Start it
+and the visual, timer and metronome stay on screen while you play.
 
-- Full six-string scale maps and verified pentatonic positions
+- **Dynamic routines** advance scale positions, triad inversions/string sets,
+  picking subdivisions, or tempo automatically on a timer or bar count - the
+  session never restarts between stages
+- **Hybrid picking**: 8 dedicated routines plus configurable pentatonic and triad
+  variants, using clear pick (P) / middle (M) / ring (R) right-hand notation
+- Full six-string scale maps and verified pentatonic positions (Boxes 1-5, any key)
+- Configurable triad shapes (root, quality, inversion, string set) with interval
+  labels
 - Numbered paths for scale sequences, spider drills, and string skipping
-- Picking directions for alternate/economy-picking work
-- Exact triad and chord shapes with interval labels
 - Beat grids for subdivisions, accents, syncopation, and compound 6/8
 - Editable personal routines created from the verified built-ins
+
+## Jam Sessions
+
+Practice over a local, generated backing track - bass, chord comping, and drums,
+synthesized on your machine, never downloaded or sampled from a recording.
+
+Pick a style (Major/Minor/Shuffle/Slow Blues, Major ii-V-I, Minor ii-V-i, Jazz
+Blues, or a Dorian vamp), any of the 12 keys, a tempo, and a duration, then start
+playing. The running view tracks the current and next chord, bar number, and time
+remaining; the fretboard highlights the active chord's tones, plus the tonic
+blues/pentatonic scale as context for Blues styles.
 
 ## Practice tools
 
@@ -74,7 +90,7 @@ and next/finish controls together while your hands are on the guitar.
 
 Practice history and progress live only on this machine. Fretboard does not analyze
 performance or claim to replace a teacher: outcomes and tempo changes are recorded
-from your input.
+from your input. A completed Jam Session records to the same history as a routine.
 
 ## Installation
 
@@ -107,9 +123,10 @@ Click the guitar icon in the bar to open Fretboard, or run:
 omarchy-shell io.github.3eye3y3.fretboard open
 ```
 
-The panel starts in **Practice**. Its other main tabs are **Tuner**, **Reference**,
-and **Progress**. All interactive controls participate in the normal Qt keyboard
-focus chain; Escape closes the panel.
+The panel starts in **Practice**, whose own sub-tabs include **Metronome**,
+**Routines**, **Tempo Trainer**, **Timer**, and **Jam**. The panel's other main tabs
+are **Tuner**, **Reference**, and **Progress**. All interactive controls participate
+in the normal Qt keyboard focus chain; Escape closes the panel.
 
 Optional IPC actions are available for shortcuts:
 
@@ -124,7 +141,9 @@ omarchy-shell io.github.3eye3y3.fretboard startRoutine <routine-id>
 
 Fretboard uses the PipeWire command-line tools already present in Omarchy:
 
-- `pw-cat` plays the metronome and drone.
+- `pw-cat` plays the metronome, drone, and generated Jam Session backing track
+  (bass, chord comping, drums - synthesized locally, never a downloaded or sampled
+  recording).
 - `pw-record` captures microphone samples for the tuner.
 - `pactl` lists available tuner input devices.
 
@@ -160,6 +179,11 @@ Built-in music/reference data remains part of the plugin code. See
   tuning. Other tunings receive accurate pitch maps without misleading shape names.
 - Progress is a practice log based on your own outcome selection, not automatic
   performance grading.
+- Jam Session backing tracks are simple, lightweight, locally synthesized
+  accompaniment (a bass line, a chord comp, and basic drums) meant to keep time and
+  outline the changes, not studio-quality production.
+- Only Minor Pentatonic has a verified, transposable Box 1-5 shape today. Other
+  configurable scales offer the full-fretboard map in any key.
 
 ## Development and testing
 

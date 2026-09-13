@@ -2,6 +2,126 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.0] - 2026-09-13
+
+Configurable routines and Jam Sessions release, merged to `main` from
+`feature/dynamic-practice-v04`.
+
+### Added
+- Configurable routine templates: instead of one preset per key/box/quality
+  combination, a template (Minor/Major Pentatonic, Blues, Major, Natural
+  Minor, Dorian, Mixolydian, a configurable Triad, and configurable hybrid-
+  picking pentatonic/triad routines) is picked from a third "Configurable"
+  Routines source and configured at selection time - key/root, position
+  (All, or Box 1-5 where verified coordinate data exists), quality,
+  inversion, string set, BPM, duration, metronome and dynamic cycling (reusing
+  the v0.4 stage engine). A configured routine is never persisted; it runs
+  through the existing routine player unchanged. All 57 v0.4 presets remain
+  available unchanged alongside templates.
+- Jam Sessions: a new "Jam" tab with a local, generated backing track (bass,
+  chord comping, drums - no samples, no downloads, no network). 8 styles:
+  Major/Minor/Shuffle/Slow Blues and Major ii-V-I/Minor ii-V-i/Jazz
+  Blues/Dorian Vamp, each selectable in any of the 12 keys with configurable
+  tempo and duration (5/10/15/20 min or custom). Chord changes drive the
+  same v0.4 stage/bar engine (extended with a looping variant so the
+  progression repeats for the session instead of holding at the last
+  chord), sharing its pause/resume semantics. The running view shows the
+  current/next chord, bar number, remaining time and chord-tone fretboard
+  guidance (plus the tonic blues/pentatonic scale as context for Blues
+  styles).
+- `helper/audio_engine.py` gained a `"jam"` playback mode generating a
+  simple bass/chord-comp/drum backing from the active chord and a
+  straight/shuffle/swing feel, using the same sample-accurate chunked-write
+  architecture as the existing metronome/drone modes. Rhythm/note decisions
+  are pure functions in the new `helper/jam_synth.py`, unit tested
+  independently (17 new Python tests).
+- `js/jam_sessions.js` (progression library, independently sourced - see
+  `docs/MUSIC_CONTENT_AUDIT.md`), and looping additions to
+  `js/stage_engine.js` (`loopedAutoStageIndex` and friends) so Jam Sessions
+  reuse the exact same generic engine v0.4 introduced rather than a second
+  sequencing engine.
+- 51 new JS tests (`tests/jam_sessions.test.mjs`, `tests/
+  routine_templates.test.mjs`, plus additions to `tests/stage_engine.test.
+  mjs`) covering every progression's transposition across all 12 keys, bar
+  timing, every configurable template, and the shared triad descriptor
+  lists. 196 total JS tests (was 166), all previously-passing tests
+  unchanged. 47 total Python tests (was 30).
+- A fixed pre-existing null-safety gap in `panel/PracticeSection.qml`'s
+  `previewShowsChordDiagram` (every sibling `preview*` helper already
+  guarded against a null item; this one didn't) - found by the new
+  Configurable routines preview, which can legitimately have no template
+  selected yet.
+- A completed Jam Session now records one practice-history entry (start
+  time, duration, "Jam: <style> in <key>"), matching how a practice routine
+  already records on completion - found and fixed during final acceptance
+  testing.
+- Final acceptance pass (offscreen Quickshell, real audio pipeline, no
+  live-desktop interaction): Minor Pentatonic Boxes 1-5 in a second
+  transposed key, dynamic box cycling, configurable/hybrid triads, Shuffle
+  Blues, Minor Blues, C Major ii-V-I, D Minor ii-V-i, D Dorian Vamp,
+  pause/resume, live chord/bar advancement against real audio-clock-paced
+  bars, and the 600px narrow layout. No orphaned helper or `pw-cat`
+  processes after repeated start/stop cycles.
+
+### Unchanged
+- Everything from v0.3.5 and v0.4 (all 57 presets/90 items, the dynamic
+  stage engine, hybrid picking, tuner, metronome, tempo trainer, practice
+  timer, progress/history, local/offline architecture).
+
+## [0.4.0-dev] - in development on `feature/dynamic-practice-v04`
+
+Dynamic Practice development release. Built on branch `feature/dynamic-
+practice-v04`, based on marketplace-reviewed `main` at `de62e07`. Not
+tagged, merged or released; `main` and the marketplace submission are
+untouched.
+
+### Added
+- A generic, data-driven dynamic/staged routine engine (`js/stage_engine.js`,
+  `js/routines.js`'s `hasStages`/`resolveStageItem`). A practice item can
+  optionally define `stages` (partial per-stage field overrides) and an
+  `advance` plan (`{ mode: "time", everySeconds }` or `{ mode: "bars",
+  everyBars }`); the engine reuses the same elapsed-time/completed-bars
+  authority as the existing tempo trainer rather than a UI timer. Manual
+  Previous/Next rebases the clock so automatic progression resumes naturally.
+  Pausing the practice timer pauses stage progression too. A whole dynamic
+  routine still records as one practice-history session.
+- 9 built-in dynamic/staged routines: Minor Pentatonic - All 5 Boxes,
+  Pentatonic Boxes - Ascending/Descending, Triad Inversion Ladder, Triad
+  String-Set Ladder, Picking Subdivision Ladder, Tempo Ladder (80→100 BPM),
+  and three dynamic hybrid-picking routines (Triad Cycle, Pentatonic
+  Positions, String Sets) demonstrating the same engine driving technique
+  content, not just scales.
+- Hybrid Picking as a Technique routine family, using the existing
+  `PICKING_PATTERN` visual mode with a new P (pick) / M (middle) / R (ring)
+  right-hand label vocabulary. 8 static routines: Pick + Middle Alternation,
+  Pick + Middle + Ring, Pedal-Tone, String-Skipping, Major Triad, Minor
+  Triad, Hybrid Picking in Thirds, and Double Stops in Sixths. See
+  `docs/MUSIC_CONTENT_AUDIT.md` for independent sourcing; every coordinate is
+  reused from an already-audited shape or located independently in code from
+  `js/theory.js`'s own pitch-class data, never copied from a tab or diagram.
+- Routine selector and running-practice UI support for dynamic routines:
+  the preview detail shows the stage sequence and advance interval; the
+  running view shows "Stage X of Y", the current stage's name/instructions/
+  visual, a remaining-time readout for time-based routines, and manual
+  Previous/Next controls - all within the existing dropdown-based Routines
+  UX, no new navigation model.
+- `tests/stage_engine.test.mjs` and `tests/dynamic_routines.test.mjs`, plus
+  new coverage in `tests/routines.test.mjs`, for the engine, every dynamic
+  routine's exact stage content, and every hybrid routine's coordinates and
+  right-hand labels. 166 total JS tests (was 136), all previously-passing
+  v0.3.5 tests unchanged.
+- An architecture note in `docs/ARCHITECTURE.md` for the planned v0.5 Jam
+  Session/backing-track feature (not implemented in v0.4), describing how it
+  will reuse this same stage/advance engine for chord-change timing.
+
+### Unchanged
+- All 40 v0.3.5 presets, 73 items, six-string 0-12 scale mapping, pentatonic
+  Boxes 1-5, position highlighting, 3NPS, triad shapes/inversions/string
+  sets, curated chord voicings, rhythm-grid/6-8 correctness, alternate-tuning
+  behavior, tuner, metronome, tempo trainer, practice timer, progress/
+  history and local/offline architecture. Backing tracks/Jam Sessions remain
+  unimplemented, planned for v0.5.
+
 ## [0.3.5] - 2026-09-13
 
 Routine-selector layout release. Marketplace preparation remains paused pending

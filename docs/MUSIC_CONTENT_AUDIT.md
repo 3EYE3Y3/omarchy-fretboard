@@ -1,5 +1,90 @@
 # Fretboard music-content correctness audit
 
+## v0.5.0 configurable routines and Jam Sessions
+
+Branch `feature/dynamic-practice-v04` (kept; see CHANGELOG for the naming
+note), based on the marketplace-reviewed `de62e07` `main`. Adds configurable
+routine templates and Jam Sessions on top of the unchanged v0.4 content (57
+presets / 90 items) - nothing already audited was modified;
+`tests/presets.test.mjs`, `tests/visual_system.test.mjs`,
+`tests/dynamic_routines.test.mjs` and `tests/canonical_music.test.mjs` all
+still pass unchanged.
+
+**Configurable routine templates** (`js/presets.js`'s `SCALE_TEMPLATES`/
+`resolveScaleTemplate`/`resolveHybridPentatonicTemplate`, `Service.qml`'s
+`resolveTriadTemplateItem`) introduce no new theory or coordinate data:
+scale templates resolve to `VisualShapes.FULL_FRETBOARD_SCALE` (the existing
+tuning-aware, key-generic membership contract) or reuse `boxAid`'s already-
+audited pentatonic-box coordinates; triad templates call
+`VisualShapes.triadShapes()`, itself already covered by
+`tests/visual_system.test.mjs`'s "A major and minor triad filters produce
+exact closed inversions" and "diminished and augmented triad filters retain
+exact quality" tests since v0.4 (that engine simply had no caller until
+now). See `tests/routine_templates.test.mjs`.
+
+**Jam Session progressions** (`js/jam_sessions.js`) were independently
+verified against reputable guitar/theory sources, accessed 2026-09-13, and
+transposition-tested across all 12 keys in `tests/jam_sessions.test.mjs`:
+
+- 12-bar dominant blues (quick-change at bar 2, V7-IV7-I7-V7 turnaround): given directly by this feature's own instructions, and cross-checked as a standard, well-documented blues form against [Guitar-chord.org — Blues progressions](https://www.guitar-chord.org/articles/blues-progressions.html) and [OtoTheory — 12-bar Blues (I7-IV7-V7)](https://www.ototheory.com/progressions/blues-12-bar).
+- Minor blues (im7-ivm7 with a dominant V7 turnaround): [JazzGuitar.be forum — Twelve Bar Blues Chord Analysis](https://www.jazzguitar.be/forum/theory/30952-twelve-bar-blues-chord-analysis.html) ("a basic 12-bar blues chord progression [in a minor key]... all three chords are usually minor or minor seventh... im7 takes the place of I7 throughout... V-IV-I-I to close") and [Blitzstar Guitar — 12-Bar Blues II: Chord Substitution and Minor Blues Harmony](https://blitzstarguitar.com/12-bar-blues-chord-substitution/).
+- Shuffle/Slow Blues: the same major-blues progression, distinguished only by feel/tempo - a shuffle/swing eighth-note feel and a slower tempo are themselves well documented blues-performance conventions, not separate chord data requiring independent sourcing.
+- Major ii-V-I (iim7-V7-Imaj7) and minor ii-V-i (iiø7-V7-im7, the "alt" dominant simplified to a plain dominant7 - a common beginner-level simplification since fully altered-dominant tensions are not representable without extended voicings): standard jazz harmony, cross-checked against [Open Music Theory — Chord Symbols](https://viva.pressbooks.pub/openmusictheory/chapter/chord-symbols/) (already cited below for chord/inversion formulas) and [Learn Jazz Standards — Blues Chord Progressions](https://www.learnjazzstandards.com/blog/learning-jazz/jazz-theory/blues-chord-progressions/).
+- Jazz Blues (quick-change IV7 at bar 2, ii7-V7 approach at bars 9-10 instead of plain V7-IV7): [Learn Jazz Standards — 4 Blues Chord Progressions](https://www.learnjazzstandards.com/blog/learning-jazz/jazz-theory/blues-chord-progressions/) ("A simple jazz blues sequence usually changes to chord IV at bar 2... uses a IIm7 V7 at bar 9") and [Taming the Saxophone — 12 Bar Blues Chord Sequence](https://tamingthesaxophone.com/theory/impro/12-bar-blues-chords). Deliberately the simplified educational form, not the denser professional variant with additional half-bar substitutions - documented as a choice in `js/jam_sessions.js`'s own comments.
+- Dorian Vamp (im7-IV7, e.g. Dm7-G7 in D Dorian): [Guitar-chord.org — Chords in Dorian mode for guitar](https://www.guitar-chord.org/key-and-chord-chart-dorian.html) ("The most common Dorian vamp is Im to IV major... 'one minor, four seven'... Any Color You Like (Dm G7)") and [Taming the Saxophone — Dorian Mode Jazz & Funk Grooves](https://tamingthesaxophone.com/theory/impro/jazz-dorian).
+
+No backing-track audio is sampled, downloaded or copied from any recording:
+`helper/audio_engine.py`'s `"jam"` mode and `helper/jam_synth.py` (see
+`docs/ARCHITECTURE.md`) synthesize bass/comping/drums locally from the
+resolved chord's pitch classes.
+
+## v0.4.0 dynamic practice and hybrid picking
+
+Branch `feature/dynamic-practice-v04`, based on the marketplace-reviewed
+`de62e07` `main`. Adds 17 new built-in presets (9 dynamic/staged routines, 8
+hybrid-picking Technique routines) on top of the unchanged 40 v0.3.5 presets,
+for 57 presets / 90 items total. No existing preset, formula, coordinate,
+voicing, tuning or rhythm data was modified - `tests/presets.test.mjs`,
+`tests/visual_system.test.mjs` and `tests/canonical_music.test.mjs` all still
+pass unchanged against the original 40/73.
+
+**Dynamic/staged routines** (`js/stage_engine.js`, `js/routines.js`'s
+`hasStages`/`resolveStageItem`) carry zero new theory or coordinate data of
+their own. Every stage's scale/box/triad content is either the exact literal
+coordinate array from an existing audited v0.3.x preset (the G-major triad-
+inversion and C-major triad-string-set shapes reused by the Triad Inversion
+Ladder and Triad String-Set Ladder), or computed live from this file's own
+already-tested `js/visual_shapes.js` functions (`positionsFor` for every
+pentatonic box, `triadShapes` for the one previously-unauthored string set,
+C major root position on strings 6-5-4). The one new coordinate set (triad
+string set "456") was generated with `Visual.triadShapes(...)` itself and
+cross-checked against the three already-audited string sets it reproduces
+exactly (see `tests/dynamic_routines.test.mjs`), rather than hand-derived.
+
+**Hybrid picking** (`PICKING_PATTERN` visual mode, already shipped in
+v0.3.x for plain alternate-picking direction arrows; P/M/R is a new label
+vocabulary on the same mode, scoped and tested separately from the existing
+arrow-label content). Content sources, accessed 2026-09-13:
+
+- [Guitar World — Hybrid picking on guitar: an in-depth lesson](https://www.guitarworld.com/magazine/depth-guide-hybrid-picking-will-have-you-playing-pro-no-time-all): pick-between-thumb-and-index hand position, per-finger string assignment, and the pick-downstroke/finger-upstroke fundamental pattern used by "Pick + Middle Alternation" and "Pick + Middle + Ring".
+- [Premier Guitar — 5 Steps to Better Hybrid Picking](https://www.premierguitar.com/lessons/country/hybrid-picking-guitar-lesson): progressive pick/middle/ring coordination drills, the model for the alternation and string-skipping routines.
+- [HubGuitar — Hybrid Picking Overview](https://hubguitar.com/technique/hybrid-picking-overview) and [Hub Guitar — Guitar Triads Chart](https://hubguitar.com/fretboard/guitar-triads-chart) (already cited below for triads): pick-plus-fingers triad grips, used for "Major/Minor Triad Hybrid Picking" and the dynamic "Hybrid Picking — Triad Cycle"/"String Sets" routines.
+- [Guitar World — Hybrid picking exercises to improve your guitar technique](https://www.guitarworld.com/lessons/five-ways-to-improve-hybrid-picking): pick-handles-the-pedal/fingers-handle-the-melody pattern, confirming "Pedal-Tone Hybrid Picking"; double-stops-over-a-pedal-note and banjo-roll framing.
+- [GuitarPlayer — Country-shred licks with double-stops](https://www.guitarplayer.com/lessons/learn-18-country-shred-licks-with-double-stops-pedal-steel-bends-and-other-tricks-of-the-trade): sliding-6ths double-stops played pick+fingers, the basis for "Double Stops in Sixths" - implemented without pedal-steel bends (not representable as fret/string coordinates), matching the source's own distinction between plain double-stops and bent ones.
+
+No tab or diagram was copied from any source. Every coordinate in every
+hybrid routine is an original array in `js/presets.js`, either reused
+verbatim from an audited v0.3.x shape or located independently by walking
+`js/theory.js`'s own scale pitch-class set across two adjacent strings in
+code (the diatonic-3rds and diatonic-6ths double-stop routines) - see this
+file's "Hybrid Picking" preset block. `tests/dynamic_routines.test.mjs`
+checks every hybrid visual uses only the documented P (pick) / M (middle) /
+R (ring) labels, that every coordinate is in-bounds, and that every
+thirds/sixths dyad pairs P with the lower-pitched string of the pair.
+
+A v0.5 Jam Session/backing-track architecture note (not yet implemented) is
+in `docs/ARCHITECTURE.md`.
+
 ## v0.3.5 routine-selector follow-up
 
 The Practice UI now resolves category and routine dropdowns to one bounded detail

@@ -16,6 +16,7 @@ as a separate process at all.
 import array
 import json
 import math
+import random
 import shutil
 import signal
 import subprocess
@@ -23,6 +24,7 @@ import sys
 import threading
 
 import click_schedule as cs
+import jam_synth as jsynth
 
 SAMPLE_RATE = 48000
 CHUNK_SAMPLES = 960  # 20ms per chunk written to the playback sink
@@ -47,6 +49,52 @@ def click_envelope(freq, amplitude, sample_rate):
     return samples
 
 
+def tone_envelope(freq, amplitude, length_ms, decay, sample_rate):
+    length = max(1, int(sample_rate * length_ms / 1000))
+    out = []
+    for i in range(length):
+        t = i / sample_rate
+        envelope = math.exp(-i / (length * decay))
+        out.append(amplitude * envelope * math.sin(2 * math.pi * freq * t))
+    return out
+
+
+def chord_envelope(freqs, amplitude, length_ms, sample_rate):
+    length = max(1, int(sample_rate * length_ms / 1000))
+    out = [0.0] * length
+    per_tone = amplitude / max(1, len(freqs))
+    for freq in freqs:
+        for i in range(length):
+            t = i / sample_rate
+            envelope = math.exp(-i / (length * 0.5))
+            out[i] += per_tone * envelope * math.sin(2 * math.pi * freq * t)
+    return out
+
+
+def kick_envelope(amplitude, sample_rate):
+    """A short pitch-dropping sine sweep (~150Hz -> ~45Hz) - a lightweight,
+    unmistakably "kick drum" transient without needing a sampled drum hit."""
+    length = max(1, int(sample_rate * 120 / 1000))
+    out = []
+    phase = 0.0
+    for i in range(length):
+        progress = i / length
+        freq = 150.0 * math.exp(-4 * progress) + 45.0
+        phase += 2 * math.pi * freq / sample_rate
+        envelope = math.exp(-i / (length * 0.22))
+        out.append(amplitude * envelope * math.sin(phase))
+    return out
+
+
+def noise_envelope(amplitude, length_ms, decay, sample_rate):
+    """A short burst of white noise under an exponential decay - stands in
+    for a snare (longer, louder) or hi-hat (shorter, quieter) without real
+    drum-kit sample libraries, matching this project's local/offline,
+    lightweight-accompaniment goal rather than DAW-quality drums."""
+    length = max(1, int(sample_rate * length_ms / 1000))
+    return [amplitude * math.exp(-i / (length * decay)) * random.uniform(-1.0, 1.0) for i in range(length)]
+
+
 class Engine:
     def __init__(self):
         self.lock = threading.Lock()
@@ -57,6 +105,12 @@ class Engine:
         self.subdivision_id = "quarter"
         self.volume = 0.8
         self.frequency = 220.0
+        # Jam Session backing-track state (mode == "jam"): current chord and
+        # rhythmic feel, pushed by Service.qml's stage engine as the
+        # progression advances. See jam_synth.py for the note/role math.
+        self.chord_root = 0
+        self.chord_quality = "dominant7"
+        self.feel = "straight"
         self.playback = None
         self.writer_thread = None
         self.stop_flag = threading.Event()
@@ -64,7 +118,7 @@ class Engine:
 
     def apply(self, cmd):
         with self.lock:
-            if "mode" in cmd and cmd["mode"] in ("metronome", "drone"):
+            if "mode" in cmd and cmd["mode"] in ("metronome", "drone", "jam"):
                 self.mode = cmd["mode"]
             if "bpm" in cmd:
                 self.bpm = cs.clamp_bpm(cmd["bpm"])
@@ -82,10 +136,20 @@ class Engine:
                     self.volume = max(0.0, min(1.0, float(cmd["volume"])))
                 except (TypeError, ValueError):
                     pass
+            if "chordRoot" in cmd:
+                try:
+                    self.chord_root = int(cmd["chordRoot"]) % 12
+                except (TypeError, ValueError):
+                    pass
+            if "chordQuality" in cmd and cmd["chordQuality"] in jsynth.CHORD_QUALITY_INTERVALS:
+                self.chord_quality = cmd["chordQuality"]
+            if "feel" in cmd and cmd["feel"] in ("straight", "shuffle", "swing"):
+                self.feel = cmd["feel"]
 
     def snapshot(self):
         with self.lock:
-            return self.mode, self.bpm, self.time_signature_id, self.subdivision_id, self.volume, self.frequency
+            return (self.mode, self.bpm, self.time_signature_id, self.subdivision_id, self.volume,
+                    self.frequency, self.chord_root, self.chord_quality, self.feel)
 
     def start(self, cmd):
         self.apply(cmd)
@@ -142,6 +206,23 @@ class Engine:
         if self.playback and self.playback.stdin:
             self.playback.stdin.write(buffer.tobytes())
 
+    def _jam_tick_envelopes(self, beat_index, sub_index, chord_root, chord_quality, volume):
+        """One eighth-note tick's worth of sound events, decided purely by
+        jam_synth.beat_role - see that module for the rhythm/note design."""
+        role = jsynth.beat_role(beat_index, sub_index)
+        if role == "hihat":
+            return [noise_envelope(volume * 0.22, 25, 0.3, SAMPLE_RATE)]
+        if role == "kick_bass":
+            bass_pc = jsynth.bass_pitch_class_for_beat(chord_root, chord_quality, beat_index)
+            bass_freq = jsynth.note_frequency(bass_pc, 2)
+            return [kick_envelope(volume * 0.95, SAMPLE_RATE),
+                    tone_envelope(bass_freq, volume * 0.55, 220, 0.6, SAMPLE_RATE)]
+        # snare_comp
+        tones = jsynth.chord_tone_pitch_classes(chord_root, chord_quality)
+        comp_freqs = [jsynth.note_frequency(t, 4) for t in tones]
+        return [noise_envelope(volume * 0.45, 90, 0.35, SAMPLE_RATE),
+                chord_envelope(comp_freqs, volume * 0.28, 260, SAMPLE_RATE)]
+
     def _write_loop(self):
         tick_index = 0
         next_tick_sample = 0
@@ -153,7 +234,52 @@ class Engine:
 
         try:
             while not self.stop_flag.is_set():
-                mode, bpm, ts_id, sub_id, volume, frequency = self.snapshot()
+                mode, bpm, ts_id, sub_id, volume, frequency, chord_root, chord_quality, feel = self.snapshot()
+
+                if mode == "jam":
+                    fade = 0.0
+                    chunk_end = sample_position + CHUNK_SAMPLES
+                    eighth_samples = cs.samples_per_tick(bpm, "eighth", SAMPLE_RATE)
+                    swing = jsynth.swing_offset_samples(SAMPLE_RATE, bpm, feel)
+                    while next_tick_sample < chunk_end:
+                        beat_index, sub_index, is_bar_start = cs.tick_info(tick_index, ts_id, "eighth")
+                        scheduled_sample = next_tick_sample + (swing if sub_index == 1 else 0)
+                        for envelope in self._jam_tick_envelopes(beat_index, sub_index, chord_root, chord_quality, volume):
+                            pending_clicks.append([scheduled_sample, envelope, 0])
+                        log({
+                            "type": "beat", "tickIndex": tick_index, "beatIndex": beat_index,
+                            "subIndex": sub_index, "accent": is_bar_start,
+                            "atSample": next_tick_sample, "atSeconds": next_tick_sample / SAMPLE_RATE,
+                        })
+                        tick_index += 1
+                        next_tick_sample += eighth_samples
+
+                    chunk = [0.0] * CHUNK_SAMPLES
+                    still_pending = []
+                    for click in pending_clicks:
+                        start, envelope, consumed = click
+                        offset = start + consumed - sample_position
+                        i = consumed
+                        while i < len(envelope):
+                            pos = offset + (i - consumed)
+                            if pos >= CHUNK_SAMPLES:
+                                break
+                            if pos >= 0:
+                                chunk[pos] += envelope[i]
+                            i += 1
+                        click[2] = i
+                        if i < len(envelope):
+                            still_pending.append(click)
+                    pending_clicks = still_pending
+
+                    try:
+                        self._write_chunk(chunk)
+                    except (BrokenPipeError, OSError):
+                        log({"type": "error", "message": "audio playback stream closed unexpectedly"})
+                        break
+
+                    sample_position = chunk_end
+                    continue
 
                 if mode == "drone":
                     chunk = [0.0] * CHUNK_SAMPLES

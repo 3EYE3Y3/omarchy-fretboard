@@ -34,8 +34,45 @@ function createItem(overrides) {
         // Optional short sequence lines shown as a textual/visual practice
         // pattern (e.g. ["1-2-3", "2-3-4", "3-4-5"] or picking-direction hints).
         pattern: Array.isArray(o.pattern) ? o.pattern.slice() : null,
+        // Optional dynamic/staged progression (v0.4). Each stage is a partial
+        // item patch (label, notes, visualAid, scaleKey, chordKey, metronome,
+        // targetBpm, fretWindow, pattern, ...) applied on top of this item's
+        // own fields - see resolveStageItem(). `advance` says how the active
+        // stage changes over time; see js/stage_engine.js. An item with no
+        // stages behaves exactly as before (unchanged static behavior).
+        stages: Array.isArray(o.stages) && o.stages.length > 0
+            ? o.stages.map(function (s) { return s ? JSON.parse(JSON.stringify(s)) : {} }) : null,
+        advance: o.advance ? {
+            mode: o.advance.mode === "bars" ? "bars" : "time",
+            everySeconds: finiteNumber(o.advance.everySeconds, 120),
+            everyBars: Math.max(1, Math.round(finiteNumber(o.advance.everyBars, 8)))
+        } : null,
         status: o.status || "pending"
     }
+}
+
+function hasStages(item) {
+    return !!(item && Array.isArray(item.stages) && item.stages.length > 0 && item.advance)
+}
+
+// Resolves the effective item for `stageIndex` of a dynamic item: every
+// stage-defined field overrides the base item's, everything else is
+// inherited. `metronome` merges shallowly (so a stage can change only e.g.
+// subdivisionId while keeping the base item's timeSignatureId/startBpm).
+// The resolved item is never itself dynamic - `stages`/`advance` are cleared
+// so every existing item consumer (visual aid, scale/chord key, metronome,
+// notes, duration) can treat it exactly like a plain static item, with zero
+// changes required at the render layer.
+function resolveStageItem(item, stageIndex) {
+    if (!hasStages(item)) return item
+    var stages = item.stages
+    var index = Math.max(0, Math.min(stages.length - 1, Math.floor(stageIndex) || 0))
+    var stage = stages[index] || {}
+    var merged = Object.assign({}, item, stage)
+    if (item.metronome || stage.metronome) merged.metronome = Object.assign({}, item.metronome || {}, stage.metronome || {})
+    merged.stages = null
+    merged.advance = null
+    return merged
 }
 
 function createRoutine(name, items) {

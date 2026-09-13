@@ -20,9 +20,12 @@ test("ships a curated bank across all seven required categories", () => {
 })
 
 test("is a sensible curated size, not empty and not hundreds", () => {
-  assert.equal(ALL.length, 40, "every audited built-in preset must stay represented")
+  // 40 v0.3.5 presets + 17 v0.4 additions (9 dynamic/staged routines, 8
+  // hybrid-picking technique routines) - every audited preset must stay
+  // represented.
+  assert.equal(ALL.length, 57, "every audited built-in preset must stay represented")
   assert.ok(ALL.length >= 20, `expected a real curated bank, got ${ALL.length}`)
-  assert.ok(ALL.length <= 60, `expected a curated bank, not hundreds, got ${ALL.length}`)
+  assert.ok(ALL.length <= 70, `expected a curated bank, not hundreds, got ${ALL.length}`)
 })
 
 test("every audited preset item has actionable timing and instruction content", () => {
