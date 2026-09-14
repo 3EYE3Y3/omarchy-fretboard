@@ -2,10 +2,10 @@
   "schemaVersion": 1,
   "id": "io.github.3eye3y3.fretboard",
   "name": "Fretboard",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "author": "3EYE3Y3",
   "license": "MIT",
-  "description": "Guided guitar practice, metronome, tuner, scales, chords and routines — right from the Omarchy bar.",
+  "description": "Guided practice, dynamic routines, Jam Sessions, Songs with your own lyrics, metronome, tuner and a CAGED chord reference — right from the Omarchy bar.",
   "kinds": ["service", "bar-widget"],
   "entryPoints": {
     "service": "Service.qml",
@@ -13,7 +13,7 @@
   },
   "barWidget": {
     "displayName": "Fretboard",
-    "description": "Guided guitar practice, metronome, tuner, scales, chords and routines.",
+    "description": "Guided guitar practice, metronome, tuner, scales, chords, CAGED reference and routines.",
     "category": "Music",
     "defaultSection": "right",
     "allowMultiple": false,

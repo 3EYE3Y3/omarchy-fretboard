@@ -103,6 +103,41 @@ test("marks a schemaVersion-less payload as migrated", () => {
   assert.equal(result.value.schemaVersion, 1)
 })
 
+test("round-trips a song's lyrics and lyrics URL unchanged (schema-free, additive fields)", () => {
+  // Title/artist/lyrics are a fully synthetic example (no real song is
+  // named or quoted anywhere in this repository) - see docs/MUSIC_CONTENT_AUDIT.md.
+  const state = {
+    schemaVersion: 1,
+    songs: [{
+      id: "s1", title: "Midnight Harbour", artist: "Northbound Signal", tuning: "standard", key: "F# minor",
+      originalBpm: 87, currentBpm: 87, targetBpm: 87,
+      notes: "Capo 2nd fret",
+      lyrics: "(placeholder verse one)\n(placeholder verse two)",
+      lyricsUrl: "https://example.com/lyrics/midnight-harbour"
+    }]
+  }
+  const result = Storage.decode(Storage.encode(state))
+  assert.equal(result.ok, true)
+  assert.equal(result.value.songs.length, 1)
+  assert.equal(result.value.songs[0].lyrics, state.songs[0].lyrics)
+  assert.equal(result.value.songs[0].lyricsUrl, state.songs[0].lyricsUrl)
+  assert.equal(result.value.songs[0].notes, "Capo 2nd fret")
+})
+
+test("loads a pre-lyrics song file with no migration needed (additive fields simply absent)", () => {
+  const raw = JSON.stringify({
+    schemaVersion: 1,
+    songs: [{ id: "old-song", title: "Legacy Song", artist: "Someone", originalBpm: 100, currentBpm: 100 }]
+  })
+  const result = Storage.decode(raw)
+  assert.equal(result.ok, true)
+  assert.equal(result.migrated, false)
+  assert.equal(result.value.songs.length, 1)
+  assert.equal(result.value.songs[0].title, "Legacy Song")
+  assert.equal(result.value.songs[0].lyrics, undefined)
+  assert.equal(result.value.songs[0].lyricsUrl, undefined)
+})
+
 test("clamps out-of-range preference values", () => {
   const raw = JSON.stringify({ schemaVersion: 1, preferences: { a4: -10, metronomeVolume: 5 } })
   const result = Storage.decode(raw)

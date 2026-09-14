@@ -1,6 +1,7 @@
 pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Controls
 import qs.Commons
 import qs.Ui
 import "../js/metronome.js" as Metronome
@@ -10,12 +11,14 @@ import "../js/visual_shapes.js" as VisualShapes
 import "../js/chord_voicings.js" as Voicings
 import "../js/tunings.js" as Tunings
 import "../js/preset_browser.js" as PresetBrowser
+import "../js/url_safety.js" as UrlSafety
+import "../js/lyrics_search.js" as LyricsSearch
 
 Item {
     id: root
     property var service: null
     property var bar: null
-    property string mode: "metronome" // metronome | routines | trainer | timer | jam
+    property string mode: "metronome" // metronome | routines | songs | trainer | timer | jam
     readonly property var routineSelectorState: PresetBrowser.selectorState(
         service && service.preferences ? service.preferences.routineSource : "presets",
         service ? service.allPresets() : [],
@@ -26,13 +29,16 @@ Item {
     Layout.fillWidth: true
 
     // Routines sits second, right beside Metronome - the two tools most
-    // practice sessions actually open with.
+    // practice sessions actually open with. Songs is active practice
+    // content (you start a practice session from it), so it sits with
+    // Routines/Jam rather than in Progress, which is history/statistics only.
     readonly property var modeOptions: [
         { value: "metronome", label: "Metronome" },
         { value: "routines", label: "Routines" },
+        { value: "songs", label: "Songs" },
+        { value: "jam", label: "Jam" },
         { value: "trainer", label: "Tempo Trainer" },
-        { value: "timer", label: "Timer" },
-        { value: "jam", label: "Jam" }
+        { value: "timer", label: "Timer" }
     ]
 
     ColumnLayout {
@@ -54,6 +60,7 @@ Item {
             sourceComponent: root.mode === "trainer" ? trainerView
                 : root.mode === "timer" ? timerView
                 : root.mode === "routines" ? routinesView
+                : root.mode === "songs" ? songsView
                 : root.mode === "jam" ? jamView
                 : metronomeView
         }
@@ -1457,6 +1464,375 @@ Item {
                     onClicked: {
                         if (!root.service || !routinesRoot.configurableTemplateId) return
                         root.service.startConfiguredRoutine(routinesRoot.configurableTemplateId, routinesRoot.currentConfigurableConfig())
+                    }
+                }
+            }
+        }
+    }
+
+    // ------------------------------------------------------------ songs
+    //
+    // Lyrics and the optional lyrics link are entirely user-supplied and
+    // stored locally with the song (js/storage.js persists songs as-is,
+    // schema-free) - Fretboard never fetches, scrapes, or guesses lyrics,
+    // and never sends song data anywhere. "Open Lyrics" only ever hands a
+    // validated http/https URL (js/url_safety.js) to Qt.openUrlExternally,
+    // the same OS/browser hand-off any other desktop link uses - never a
+    // shell. Starting practice reuses the exact routine-runner Service.qml
+    // already has (see startSongPractice) rather than a second engine.
+    Component {
+        id: songsView
+        ColumnLayout {
+            width: layout.width
+            spacing: Style.spacing.md
+
+            Item {
+                id: songsRoot
+                objectName: "songsRoot"
+                Layout.fillWidth: true
+                implicitHeight: songsRootLayout.implicitHeight
+
+                readonly property var songs: root.service ? root.service.songs : []
+                property string selectedSongId: songsRoot.songs.length ? songsRoot.songs[0].id : ""
+                readonly property var chosen: songsRoot.songs.find(function (s) { return s.id === songsRoot.selectedSongId }) || null
+                property bool editorOpen: false
+                property string editorTargetId: ""
+
+                function label(song) { return song.title + (song.artist ? " — " + song.artist : "") }
+
+                function tuningLabel(id) {
+                    var builtin = Tunings.BUILTIN_TUNINGS.find(function (t) { return t.id === id })
+                    if (builtin) return builtin.name
+                    var custom = root.service ? (root.service.customTunings || []).find(function (t) { return t.id === id }) : null
+                    return custom ? custom.name : (id || "Standard")
+                }
+
+                // Editor fields are plain TextField/Dropdown ids (titleField,
+                // artistField, tuningField, keyField, notesField, lyricsInput,
+                // lyricsUrlField, declared below) read/written directly
+                // rather than mirrored through extra properties: QML breaks
+                // a property's own declarative binding the moment the user
+                // types into it or picks a Dropdown value, so a "text:
+                // songsRoot.editorTitle" style two-way mirror would silently
+                // stop reflecting a *second* beginEditSong() call in the same
+                // session. Setting each field's .text/.value here directly
+                // has no such staleness problem.
+                function beginAdd() {
+                    editorTargetId = ""
+                    titleField.text = ""; artistField.text = ""; tuningField.value = "standard"; keyField.text = ""
+                    notesField.text = ""; lyricsInput.text = ""; lyricsUrlField.text = ""
+                    editorOpen = true
+                }
+
+                function beginEditSong() {
+                    if (!chosen) return
+                    editorTargetId = chosen.id
+                    titleField.text = chosen.title || ""
+                    artistField.text = chosen.artist || ""
+                    tuningField.value = chosen.tuning || "standard"
+                    keyField.text = chosen.key || ""
+                    notesField.text = chosen.notes || ""
+                    lyricsInput.text = chosen.lyrics || ""
+                    lyricsUrlField.text = chosen.lyricsUrl || ""
+                    editorOpen = true
+                }
+
+                function cancelEdit() { editorOpen = false }
+
+                function saveEdit() {
+                    if (!root.service || !titleField.text.trim()) return
+                    var fields = {
+                        title: titleField.text.trim(), artist: artistField.text.trim(), tuning: tuningField.value,
+                        key: keyField.text.trim(), notes: notesField.text, lyrics: lyricsInput.text,
+                        lyricsUrl: lyricsUrlField.text.trim()
+                    }
+                    if (editorTargetId) {
+                        root.service.updateSong(Object.assign({}, chosen, fields))
+                    } else {
+                        var created = root.service.createSong(Object.assign({ originalBpm: 120, currentBpm: 120, targetBpm: 120 }, fields))
+                        selectedSongId = created.id
+                    }
+                    editorOpen = false
+                }
+
+                function deleteSelected() {
+                    if (!root.service || !chosen) return
+                    root.service.deleteSong(chosen.id)
+                    var remaining = songsRoot.songs.filter(function (s) { return s.id !== chosen.id })
+                    selectedSongId = remaining.length ? remaining[0].id : ""
+                    editorOpen = false
+                }
+
+                ColumnLayout {
+                    id: songsRootLayout
+                    width: parent.width
+                    spacing: Style.spacing.sm
+
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Style.spacing.md
+                        Dropdown {
+                            Layout.fillWidth: true
+                            label: "Song"
+                            options: songsRoot.songs.map(function (s) { return { value: s.id, label: songsRoot.label(s) } })
+                            value: songsRoot.selectedSongId
+                            enabled: songsRoot.songs.length > 0
+                            onChanged: function (value) { songsRoot.selectedSongId = value; songsRoot.editorOpen = false }
+                        }
+                        Button {
+                            focusable: true; text: "+ New Song"; bordered: true
+                            foreground: Color.foreground; accent: Color.accent
+                            onClicked: songsRoot.beginAdd()
+                        }
+                    }
+
+                    Text {
+                        visible: songsRoot.songs.length === 0 && !songsRoot.editorOpen
+                        text: "No songs saved yet. Add one to practice with its key, tuning, BPM and lyrics on hand."
+                        color: Color.foreground
+                        opacity: 0.6
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        font.family: Style.font.family
+                        font.pixelSize: Style.font.body
+                    }
+
+                    // Detail (read-only) / editor (add or edit), bounded and
+                    // scrollable exactly like the Routines detail box above -
+                    // lyrics can be long, so this must never grow the panel
+                    // past its own bounds (see also panel/ReferenceSection.qml).
+                    Rectangle {
+                        visible: !!songsRoot.chosen || songsRoot.editorOpen
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(songDetailScroll.contentHeight + Style.space(20), Style.space(420))
+                        color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.025)
+                        radius: Style.space(6)
+                        clip: true
+
+                        Flickable {
+                            id: songDetailScroll
+                            objectName: "songDetailScroll"
+                            anchors.fill: parent
+                            anchors.margins: Style.space(10)
+                            contentWidth: width
+                            contentHeight: songsRoot.editorOpen ? songEditor.implicitHeight : songDetail.implicitHeight
+                            clip: true
+                            boundsBehavior: Flickable.StopAtBounds
+                            interactive: contentHeight > height
+
+                            ColumnLayout {
+                                id: songDetail
+                                visible: !songsRoot.editorOpen
+                                width: songDetailScroll.width
+                                spacing: Style.spacing.xs
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: songsRoot.chosen ? songsRoot.chosen.title : ""
+                                        color: Color.foreground
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.heading
+                                        font.bold: true
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Button { focusable: true; text: "Edit"; foreground: Color.foreground; accent: Color.accent; onClicked: songsRoot.beginEditSong() }
+                                    Button { focusable: true; text: "Delete"; foreground: Color.foreground; accent: Color.accent; onClicked: songsRoot.deleteSelected() }
+                                }
+                                Text {
+                                    visible: !!(songsRoot.chosen && songsRoot.chosen.artist)
+                                    text: songsRoot.chosen ? songsRoot.chosen.artist : ""
+                                    color: Color.accent
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                    font.bold: true
+                                }
+
+                                GridLayout {
+                                    Layout.fillWidth: true
+                                    columns: 3
+                                    columnSpacing: Style.spacing.md
+                                    rowSpacing: Style.spacing.xxs
+                                    Text { text: "Key  " + (songsRoot.chosen && songsRoot.chosen.key ? songsRoot.chosen.key : "—"); color: Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                                    Text { text: "Tuning  " + (songsRoot.chosen ? songsRoot.tuningLabel(songsRoot.chosen.tuning) : "—"); color: Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                                    Text { text: "BPM  " + (songsRoot.chosen ? (songsRoot.chosen.currentBpm || songsRoot.chosen.originalBpm || "—") : "—"); color: Color.foreground; opacity: 0.8; font.family: Style.font.family; font.pixelSize: Style.font.caption }
+                                }
+
+                                Text {
+                                    visible: !!(songsRoot.chosen && songsRoot.chosen.notes)
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    text: songsRoot.chosen ? songsRoot.chosen.notes : ""
+                                    color: Color.foreground
+                                    opacity: 0.85
+                                    wrapMode: Text.WordWrap
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+
+                                PanelSectionHeader { text: "Lyrics" }
+                                Text {
+                                    visible: !(songsRoot.chosen && songsRoot.chosen.lyrics)
+                                    text: "No lyrics added yet."
+                                    color: Color.foreground
+                                    opacity: 0.5
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                }
+                                Text {
+                                    visible: !!(songsRoot.chosen && songsRoot.chosen.lyrics)
+                                    Layout.fillWidth: true
+                                    Layout.minimumWidth: 0
+                                    text: songsRoot.chosen ? songsRoot.chosen.lyrics : ""
+                                    color: Color.foreground
+                                    wrapMode: Text.WordWrap
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.body
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Layout.topMargin: Style.spacing.xs
+                                    Item { Layout.fillWidth: true }
+                                    Button {
+                                        focusable: true; text: "Start Practice"; bordered: true
+                                        foreground: Color.foreground; accent: Color.accent
+                                        enabled: !!songsRoot.chosen
+                                        onClicked: {
+                                            if (!root.service || !songsRoot.chosen) return
+                                            root.service.startSongPractice(songsRoot.chosen)
+                                            root.mode = "routines"
+                                        }
+                                    }
+                                }
+
+                                // Two distinct, user-triggered browser actions. Search Lyrics
+                                // opens a generated web search built only from this song's own
+                                // Title/Artist - Fretboard never fetches/scrapes lyrics itself.
+                                // Open Lyrics opens the exact saved Lyrics URL, only once it
+                                // validates as http/https (js/url_safety.js). Both read
+                                // songsRoot.chosen fresh at click time, so switching songs or
+                                // editing Title/Artist/Lyrics URL is always reflected immediately -
+                                // neither ever caches a stale query or link.
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.spacing.md
+                                    Button {
+                                        focusable: true; text: "Search Lyrics"; bordered: true
+                                        foreground: Color.foreground; accent: Color.accent
+                                        enabled: !!songsRoot.chosen && LyricsSearch.canSearchLyrics(songsRoot.chosen.title)
+                                        onClicked: {
+                                            var url = LyricsSearch.buildLyricsSearchUrl(songsRoot.chosen.title, songsRoot.chosen.artist)
+                                            if (url) Qt.openUrlExternally(url)
+                                        }
+                                    }
+                                    Button {
+                                        focusable: true; text: "Open Lyrics"; bordered: true
+                                        foreground: Color.foreground; accent: Color.accent
+                                        visible: !!(songsRoot.chosen && songsRoot.chosen.lyricsUrl && songsRoot.chosen.lyricsUrl.trim() !== "")
+                                        enabled: !!(songsRoot.chosen && UrlSafety.isHttpUrl(songsRoot.chosen.lyricsUrl))
+                                        onClicked: Qt.openUrlExternally(songsRoot.chosen.lyricsUrl)
+                                    }
+                                    Text {
+                                        visible: !!(songsRoot.chosen && songsRoot.chosen.lyricsUrl && songsRoot.chosen.lyricsUrl.trim() !== "" && !UrlSafety.isHttpUrl(songsRoot.chosen.lyricsUrl))
+                                        text: "Saved link isn't a valid http/https URL."
+                                        color: Color.foreground
+                                        opacity: 0.6
+                                        font.family: Style.font.family
+                                        font.pixelSize: Style.font.caption
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
+                            }
+
+                            ColumnLayout {
+                                id: songEditor
+                                visible: songsRoot.editorOpen
+                                width: songDetailScroll.width
+                                spacing: Style.spacing.sm
+
+                                PanelSectionHeader { text: songsRoot.editorTargetId ? "Edit Song" : "Add a Song" }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.spacing.md
+                                    TextField { id: titleField; Layout.fillWidth: true; placeholderText: "Title" }
+                                    TextField { id: artistField; Layout.fillWidth: true; placeholderText: "Artist" }
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Style.spacing.md
+                                    Dropdown {
+                                        id: tuningField
+                                        label: "Tuning"
+                                        options: Tunings.BUILTIN_TUNINGS.map(function (t) { return { value: t.id, label: t.name } })
+                                        value: "standard"
+                                        onChanged: function (value) { tuningField.value = value }
+                                    }
+                                    TextField { id: keyField; Layout.fillWidth: true; placeholderText: "Key (e.g. A minor)" }
+                                }
+                                TextField {
+                                    id: notesField
+                                    Layout.fillWidth: true
+                                    placeholderText: "Notes (chord progressions, capo, reminders...)"
+                                }
+
+                                Text {
+                                    text: "Lyrics (typed or pasted here; stored only on this device)"
+                                    color: Color.foreground
+                                    opacity: 0.7
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.caption
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    Layout.preferredHeight: Style.space(140)
+                                    color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.05)
+                                    border.width: 1
+                                    border.color: Qt.rgba(Color.foreground.r, Color.foreground.g, Color.foreground.b, 0.25)
+                                    radius: Style.cornerRadius
+                                    clip: true
+
+                                    Flickable {
+                                        anchors.fill: parent
+                                        anchors.margins: Style.space(6)
+                                        contentWidth: width
+                                        contentHeight: lyricsInput.implicitHeight
+                                        clip: true
+                                        boundsBehavior: Flickable.StopAtBounds
+
+                                        TextArea {
+                                            id: lyricsInput
+                                            width: parent.width
+                                            wrapMode: TextArea.Wrap
+                                            placeholderText: "Verse 1..."
+                                            color: Color.foreground
+                                            font.family: Style.font.family
+                                            font.pixelSize: Style.font.body
+                                            background: null
+                                        }
+                                    }
+                                }
+
+                                TextField {
+                                    id: lyricsUrlField
+                                    Layout.fillWidth: true
+                                    placeholderText: "Lyrics URL (optional, e.g. https://... - opened only when you click Open Lyrics)"
+                                }
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    Item { Layout.fillWidth: true }
+                                    Button { focusable: true; text: "Cancel"; foreground: Color.foreground; accent: Color.accent; onClicked: songsRoot.cancelEdit() }
+                                    Button {
+                                        focusable: true; text: "Save Song"; bordered: true
+                                        foreground: Color.foreground; accent: Color.accent
+                                        enabled: titleField.text.trim().length > 0
+                                        onClicked: songsRoot.saveEdit()
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

@@ -55,19 +55,38 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
+                // Each child below shrinks toward a legible floor before
+                // this row can overflow. Layout.minimumWidth: 0 here is a
+                // remaining safety net: if the panel is ever narrower than
+                // the three floors combined, this row overflows on its own
+                // rather than forcing ColumnLayout to widen every unrelated
+                // fillWidth sibling below (every wrapped caption) to match.
+                Layout.minimumWidth: 0
                 Dropdown {
+                    // Shrinks from its normal implicitWidth down to this
+                    // floor before eliding further, instead of forcing the
+                    // row past the panel's actual width at narrow sizes.
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 130
+                    Layout.maximumWidth: implicitWidth
                     label: "Tuning"
                     options: root.tuningOptions()
                     value: root.service ? root.service.selectedTuningId : "standard"
                     onChanged: function (value) { if (root.service) root.service.setTuning(value) }
                 }
                 Dropdown {
-                    label: "Key"
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 90
+                    Layout.maximumWidth: implicitWidth
+                    label: root.service && root.service.referenceMode === "chord" ? "Root" : "Key"
                     options: root.noteChoices
                     value: root.service ? root.service.referenceKey : "C"
                     onChanged: function (value) { if (root.service) root.service.setReferenceKey(value) }
                 }
                 Toggle {
+                    Layout.fillWidth: true
+                    Layout.minimumWidth: 150
+                    Layout.maximumWidth: implicitWidth
                     label: "Show intervals"
                     description: "Otherwise shows note names"
                     checked: root.service ? root.service.showIntervals : false
@@ -108,137 +127,241 @@ Item {
                 value: root.service ? root.service.referenceTriadQuality : "major"
                 onChanged: function (value) { if (root.service) root.service.setReferenceTriad(value) }
             }
-            Dropdown {
+            ButtonGroup {
                 visible: root.service ? root.service.referenceMode === "chord" : false
-                label: "Chord"
-                options: Theory.CHORDS.map(function (c) { return { value: c.id, label: c.name } })
+                Layout.fillWidth: true
+                options: root.chordQualityOptions()
                 value: root.service ? root.service.referenceChordId : "major"
+                foreground: Color.foreground
+                accent: Color.accent
                 onChanged: function (value) { if (root.service) root.service.setReferenceChord(value) }
             }
 
-            ButtonGroup {
-                visible: root.service ? root.service.referenceMode === "scale" && root.service.referenceScaleId === "minor_pentatonic" : false
+            // Everything below is variable-height (a full fretboard map, and
+            // in Chord mode a large CAGED diagram on top of that) and can
+            // easily exceed the plugin popup's own height budget. It scrolls
+            // in a bounded box instead of painting outside the panel, while
+            // the controls above (tuning/root, mode, scale/quality) stay put
+            // and always usable. See tests/reference_layout.test.mjs.
+            Rectangle {
                 Layout.fillWidth: true
-                options: [
-                    { value: "all", label: "All" }, { value: "1", label: "Box 1" },
-                    { value: "2", label: "Box 2" }, { value: "3", label: "Box 3" },
-                    { value: "4", label: "Box 4" }, { value: "5", label: "Box 5" }
-                ]
-                value: root.service ? root.service.referenceScalePosition : "all"
-                foreground: Color.foreground
-                accent: Color.accent
-                onChanged: function (value) { if (root.service) root.service.setReferenceScalePosition(value) }
-            }
+                Layout.preferredHeight: Math.min(referenceBody.implicitHeight, Style.space(330))
+                color: "transparent"
+                clip: true
 
-            ButtonGroup {
-                visible: root.service ? root.service.referenceMode === "triad" : false
-                Layout.fillWidth: true
-                options: [
-                    { value: "all", label: "All" }, { value: "root", label: "Root" },
-                    { value: "first", label: "1st Inv" }, { value: "second", label: "2nd Inv" }
-                ]
-                value: root.service ? root.service.referenceTriadInversion : "all"
-                foreground: Color.foreground
-                accent: Color.accent
-                onChanged: function (value) { if (root.service) root.service.setReferenceTriadInversion(value) }
-            }
+                Flickable {
+                    id: referenceScroll
+                    objectName: "referenceScroll"
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: referenceBody.implicitHeight
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    interactive: contentHeight > height
 
-            ButtonGroup {
-                visible: root.service ? root.service.referenceMode === "triad" : false
-                Layout.fillWidth: true
-                options: [
-                    { value: "all", label: "All sets" }, { value: "123", label: "1-2-3" },
-                    { value: "234", label: "2-3-4" }, { value: "345", label: "3-4-5" },
-                    { value: "456", label: "4-5-6" }
-                ]
-                value: root.service ? root.service.referenceTriadStringSet : "all"
-                foreground: Color.foreground
-                accent: Color.accent
-                onChanged: function (value) { if (root.service) root.service.setReferenceTriadStringSet(value) }
-            }
+                    ColumnLayout {
+                        id: referenceBody
+                        width: referenceScroll.width - (referenceScroll.contentHeight > referenceScroll.height ? Style.space(8) : 0)
+                        spacing: Style.spacing.md
 
-            Text {
-                visible: root.service ? root.service.referenceMode === "triad" && root.service.selectedTuningId !== "standard" : false
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: "Exact named triad shapes are verified for Standard tuning. Chord tones remain recalculated for this tuning, without a misleading shape highlight."
-                color: Color.foreground
-                opacity: 0.62
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
-            Text {
-                visible: root.service ? root.service.referenceMode === "scale"
-                    && root.service.referenceScaleId === "minor_pentatonic"
-                    && root.service.referenceScalePosition !== "all"
-                    && root.service.selectedTuningId !== "standard" : false
-                Layout.fillWidth: true
-                wrapMode: Text.WordWrap
-                text: "Named pentatonic boxes are verified for Standard tuning. The complete scale map is recalculated for this tuning without a misleading box highlight."
-                color: Color.foreground
-                opacity: 0.62
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
+                        ButtonGroup {
+                            visible: root.service ? root.service.referenceMode === "scale" && root.service.referenceScaleId === "minor_pentatonic" : false
+                            Layout.fillWidth: true
+                            options: [
+                                { value: "all", label: "All" }, { value: "1", label: "Box 1" },
+                                { value: "2", label: "Box 2" }, { value: "3", label: "Box 3" },
+                                { value: "4", label: "Box 4" }, { value: "5", label: "Box 5" }
+                            ]
+                            value: root.service ? root.service.referenceScalePosition : "all"
+                            foreground: Color.foreground
+                            accent: Color.accent
+                            onChanged: function (value) { if (root.service) root.service.setReferenceScalePosition(value) }
+                        }
 
-            RowLayout {
-                visible: !!root.currentTones()
-                Layout.fillWidth: true
-                spacing: Style.spacing.md
-                Text {
-                    text: root.currentTones() ? ("Notes: " + root.currentTones().notes.map(function (n) { return n.name }).join(" · ")) : ""
-                    color: Color.foreground
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.body
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-            }
-            Text {
-                visible: !!root.currentTones()
-                text: root.currentTones() ? ("Formula: " + root.currentTones().formula) : ""
-                color: Color.foreground
-                opacity: 0.6
-                font.family: Style.font.family
-                font.pixelSize: Style.font.caption
-            }
+                        ButtonGroup {
+                            visible: root.service ? root.service.referenceMode === "triad" : false
+                            Layout.fillWidth: true
+                            options: [
+                                { value: "all", label: "All" }, { value: "root", label: "Root" },
+                                { value: "first", label: "1st Inv" }, { value: "second", label: "2nd Inv" }
+                            ]
+                            value: root.service ? root.service.referenceTriadInversion : "all"
+                            foreground: Color.foreground
+                            accent: Color.accent
+                            onChanged: function (value) { if (root.service) root.service.setReferenceTriadInversion(value) }
+                        }
 
-            FretboardGrid {
-                Layout.fillWidth: true
-                board: root.highlightedBoard()
-                stringLabels: root.stringLabels()
-                showIntervals: root.service ? root.service.showIntervals : false
-                toneData: root.currentTones()
-                startFret: VisualShapes.FULL_FRETBOARD_START_FRET
-                endFret: root.service && root.service.referenceMode === "chord"
-                    ? -1 : VisualShapes.FULL_FRETBOARD_END_FRET
-                allowScroll: root.service ? root.service.referenceMode === "chord" : false
-            }
+                        ButtonGroup {
+                            visible: root.service ? root.service.referenceMode === "triad" : false
+                            Layout.fillWidth: true
+                            options: [
+                                { value: "all", label: "All sets" }, { value: "123", label: "1-2-3" },
+                                { value: "234", label: "2-3-4" }, { value: "345", label: "3-4-5" },
+                                { value: "456", label: "4-5-6" }
+                            ]
+                            value: root.service ? root.service.referenceTriadStringSet : "all"
+                            foreground: Color.foreground
+                            accent: Color.accent
+                            onChanged: function (value) { if (root.service) root.service.setReferenceTriadStringSet(value) }
+                        }
 
-            ColumnLayout {
-                visible: root.service ? root.service.referenceMode === "chord" : false
-                Layout.fillWidth: true
-                spacing: Style.spacing.sm
-                PanelSectionHeader { text: "Voicings" }
-                RowLayout {
-                    spacing: Style.spacing.lg
-                    Repeater {
-                        model: root.service ? root.service.currentChordVoicings() : []
-                        delegate: ChordDiagram {
-                            required property var modelData
-                            voicing: modelData
+                        Text {
+                            visible: root.service ? root.service.referenceMode === "triad" && root.service.selectedTuningId !== "standard" : false
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            wrapMode: Text.WordWrap
+                            text: "Exact named triad shapes are verified for Standard tuning. Chord tones remain recalculated for this tuning, without a misleading shape highlight."
+                            color: Color.foreground
+                            opacity: 0.62
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+                        Text {
+                            visible: root.service ? root.service.referenceMode === "scale"
+                                && root.service.referenceScaleId === "minor_pentatonic"
+                                && root.service.referenceScalePosition !== "all"
+                                && root.service.selectedTuningId !== "standard" : false
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            wrapMode: Text.WordWrap
+                            text: "Named pentatonic boxes are verified for Standard tuning. The complete scale map is recalculated for this tuning without a misleading box highlight."
+                            color: Color.foreground
+                            opacity: 0.62
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+
+                        Text {
+                            readonly property bool inChordMode: root.service ? root.service.referenceMode === "chord" : false
+                            visible: inChordMode && !!root.currentTones()
+                            text: (inChordMode && root.currentTones()) ? root.chordDisplayName(root.currentTones()) : ""
+                            color: Color.foreground
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.heading
+                            font.bold: true
+                        }
+
+                        RowLayout {
+                            visible: !!root.currentTones()
+                            Layout.fillWidth: true
+                            spacing: Style.spacing.md
+                            Text {
+                                text: root.currentTones() ? ("Notes: " + root.currentTones().notes.map(function (n) { return n.name }).join(" · ")) : ""
+                                color: Color.foreground
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.body
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                        Text {
+                            visible: !!root.currentTones()
+                            text: root.currentTones() ? ("Formula: " + root.currentTones().formula) : ""
+                            color: Color.foreground
+                            opacity: 0.6
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+
+                        PanelSectionHeader {
+                            visible: root.service ? root.service.referenceMode === "chord" : false
+                            text: "Chord Tones"
+                        }
+                        Text {
+                            visible: root.service ? root.service.referenceMode === "chord" : false
+                            Layout.fillWidth: true
+                            Layout.minimumWidth: 0
+                            wrapMode: Text.WordWrap
+                            text: "Every location of a chord tone across the neck. This is a note map, not a claim that every highlighted combination is a playable chord shape."
+                            color: Color.foreground
+                            opacity: 0.6
+                            font.family: Style.font.family
+                            font.pixelSize: Style.font.caption
+                        }
+
+                        FretboardGrid {
+                            Layout.fillWidth: true
+                            board: root.highlightedBoard()
+                            stringLabels: root.stringLabels()
+                            showIntervals: root.service ? root.service.showIntervals : false
+                            toneData: root.currentTones()
+                            startFret: VisualShapes.FULL_FRETBOARD_START_FRET
+                            endFret: root.service && root.service.referenceMode === "chord"
+                                ? -1 : VisualShapes.FULL_FRETBOARD_END_FRET
+                            allowScroll: root.service ? root.service.referenceMode === "chord" : false
+                        }
+
+                        ColumnLayout {
+                            visible: root.service ? root.service.referenceMode === "chord" : false
+                            Layout.fillWidth: true
+                            spacing: Style.spacing.sm
+
+                            PanelSectionHeader { text: "CAGED Shapes" }
+                            Text {
+                                Layout.fillWidth: true
+                                Layout.minimumWidth: 0
+                                wrapMode: Text.WordWrap
+                                text: "CAGED shapes are movable forms based on the open C, A, G, E and D chord shapes. The letters name the shape's origin, not the chord's root."
+                                color: Color.foreground
+                                opacity: 0.6
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            Text {
+                                visible: root.service ? root.service.selectedTuningId !== "standard" : false
+                                text: "CAGED shapes are shown in Standard tuning."
+                                color: Color.foreground
+                                opacity: 0.7
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.body
+                            }
+
+                            ButtonGroup {
+                                visible: root.service ? root.service.selectedTuningId === "standard" : false
+                                Layout.fillWidth: true
+                                options: root.cagedShapeOptions()
+                                value: root.service ? root.service.referenceCagedShape : ""
+                                foreground: Color.foreground
+                                accent: Color.accent
+                                onChanged: function (value) { if (root.service) root.service.setReferenceCagedShape(value) }
+                            }
+
+                            Text {
+                                visible: root.service ? (root.service.selectedTuningId === "standard" && !root.currentCagedShape()) : false
+                                text: "No verified CAGED shape is available for this chord yet."
+                                color: Color.foreground
+                                opacity: 0.6
+                                font.family: Style.font.family
+                                font.pixelSize: Style.font.caption
+                            }
+
+                            ColumnLayout {
+                                visible: !!root.currentCagedShape()
+                                Layout.alignment: Qt.AlignHCenter
+                                spacing: Style.spacing.xs
+
+                                Text {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    text: (root.currentTones() && root.currentCagedShape())
+                                        ? (root.chordDisplayName(root.currentTones()) + "  ·  " + root.currentCagedShape().shape + " SHAPE  ·  " + root.fretPositionLabel(root.currentCagedShape()))
+                                        : ""
+                                    color: Color.foreground
+                                    font.family: Style.font.family
+                                    font.pixelSize: Style.font.title
+                                    font.bold: true
+                                }
+
+                                CagedDiagram {
+                                    Layout.alignment: Qt.AlignHCenter
+                                    Layout.topMargin: Style.spacing.sm
+                                    shape: root.currentCagedShape()
+                                    toneData: root.currentTones()
+                                    showIntervals: root.service ? root.service.showIntervals : false
+                                }
+                            }
                         }
                     }
-                }
-                Text {
-                    visible: root.service ? (root.service.referenceMode === "chord" && root.service.currentChordVoicings().length === 0) : false
-                    text: "Audited chord-shape diagrams are available in Standard tuning. Note and interval membership above remains tuning-aware."
-                    color: Color.foreground
-                    opacity: 0.6
-                    font.family: Style.font.family
-                    font.pixelSize: Style.font.caption
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
                 }
             }
         }
@@ -262,6 +385,62 @@ Item {
         var tuning = root.service ? root.service.currentTuning() : null
         if (!tuning) return []
         return tuning.notes.map(function (n) { return n.replace(/[0-9-]/g, "") })
+    }
+
+    // Chord qualities Fretboard actually supports and can verify (js/theory.js
+    // CHORDS), in the order a guitarist would want to browse them. "add9" is
+    // deliberately left out of this reference view: it has no CAGED coverage
+    // and no chord-chart-standard short symbol.
+    readonly property var chordQualityOrder: ["major", "minor", "power", "dominant7", "major7", "minor7", "diminished", "augmented", "sus2", "sus4"]
+    readonly property var chordQualityShortLabels: ({
+        major: "Major", minor: "Minor", power: "5", dominant7: "7",
+        major7: "Maj7", minor7: "m7", diminished: "dim", augmented: "aug",
+        sus2: "sus2", sus4: "sus4"
+    })
+
+    function chordQualityOptions() {
+        var options = []
+        for (var i = 0; i < chordQualityOrder.length; i++) {
+            var id = chordQualityOrder[i]
+            if (Theory.chordById(id)) options.push({ value: id, label: chordQualityShortLabels[id] })
+        }
+        return options
+    }
+
+    // "D Major"/"D Minor" read more naturally spelled out; every other
+    // quality already has a standard chord-chart short symbol (D7, Dmaj7,
+    // Dm7, Ddim, Daug, Dsus2, Dsus4, D5) that js/theory.js already produces.
+    function chordDisplayName(chord) {
+        if (!chord) return ""
+        if (chord.symbol === "") return chord.root + " Major"
+        if (chord.symbol === "m") return chord.root + " Minor"
+        return chord.name
+    }
+
+    function cagedShapeOptions() {
+        var shapes = root.service ? root.service.availableCagedShapes() : []
+        return shapes.map(function (s) { return { value: s, label: s } })
+    }
+
+    function currentCagedShape() {
+        return root.service ? root.service.currentCagedShape() : null
+    }
+
+    function fretPositionLabel(shape) {
+        if (!shape) return ""
+        if (shape.anchorFret === 0) return "Open Position"
+        return root.ordinal(shape.anchorFret) + " fret"
+    }
+
+    function ordinal(n) {
+        var mod100 = n % 100
+        if (mod100 >= 11 && mod100 <= 13) return n + "th"
+        switch (n % 10) {
+            case 1: return n + "st"
+            case 2: return n + "nd"
+            case 3: return n + "rd"
+            default: return n + "th"
+        }
     }
 
     // ------------------------------------------------------------ circle of fifths

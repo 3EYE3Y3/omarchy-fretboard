@@ -3,7 +3,7 @@
 ## Automated
 
 ```bash
-npm test                                        # 196 tests, node:test + node:assert/strict
+npm test                                        # 252 tests, node:test + node:assert/strict
 python3 -m unittest discover -s helper/tests    # 47 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
@@ -34,6 +34,11 @@ reimplementation drift between "the logic" and "the tested logic."
 | Jam Session progressions (v0.5) | `js/jam_sessions.js` / `tests/jam_sessions.test.mjs` | All 8 styles present across Blues/Jazz genres, all 12 keys; exact transposed chord symbols for every style (major/minor blues, ii-V-I/ii-V-i, jazz blues, Dorian vamp) against the sourced forms in `docs/MUSIC_CONTENT_AUDIT.md`; shuffle/slow blues reuse the identical progression; bar-per-chord counts; every style×key combination resolves without throwing; unknown-style safety |
 | Dynamic stage engine looping (v0.5) | `js/stage_engine.js` / `tests/stage_engine.test.mjs` | `loopedAutoStageIndex`/`loopedStageIndexAt*` wrap back to stage 0 instead of holding at the end, in both time and bar mode; `completedCycles`; `loopedStageBarsRemaining`/`loopedStageSecondsRemaining` count down correctly across a cycle-wrap boundary |
 | Manifest | `manifest.json` / `tests/manifest.test.mjs` | Schema version, non-reserved id, every kind has a matching, existing entry point |
+| CAGED chord shapes (v0.5.1) | `js/caged_shapes.js` / `tests/caged_shapes.test.mjs` | Structural validation of every canonical shape definition; exact published open-position fingerings for all five Major CAGED shapes; movable-shape transposition to the correct fret/barre position across roots; audited-coverage-per-quality (not fabricated to 5 shapes); every shape/root combination sounds only chord tones with the root present; Standard-tuning-only enforcement |
+| Reference bounded scroll (v0.5.1) | `tests/reference_layout.test.mjs` | Static structural guard (no QML render harness in this suite) that the Chord Tones/CAGED body is wrapped in a clipped, bounded `Flickable`, Tuning/Root/mode controls stay outside it, and the Tuning row's responsive-width safety net is present |
+| Lyrics-link URL safety (v0.5.1) | `js/url_safety.js` / `tests/url_safety.test.mjs` | Accepts only well-formed `http`/`https`; rejects `javascript:`/`file:`/`data:`/other schemes, bare text, and embedded whitespace/control characters |
+| Lyrics search query (v0.5.1) | `js/lyrics_search.js` / `tests/lyrics_search.test.mjs` | Exact quoted Artist+Title query, Title-only fallback, empty-Title disables the action, whitespace trimmed without altering internal text, no inference/substitution, HTTPS output, percent-encoding of spaces/apostrophes/punctuation/ampersands/Unicode |
+| Songs under Practice (v0.5.1) | `tests/practice_songs_layout.test.mjs` | Songs ordered correctly in Practice's mode list and removed from Progress; bounded/clipped detail-editor Flickable; bounded lyrics `TextArea`; Open Lyrics gated by URL-safety; Search Lyrics gated by `canSearchLyrics` and reading the live selection; Start Practice reuses the routine runner with no `targetBpm` on the ad-hoc item |
 | Click-schedule math (Python) | `helper/click_schedule.py` / `helper/tests/test_click_schedule.py` | Same tick/beat/accent math as `js/metronome.js`, verified independently on the audio engine's own side |
 | Jam synthesis math (Python, v0.5) | `helper/jam_synth.py` / `helper/tests/test_jam_synth.py` | Chord-tone pitch classes for all 7 qualities (including wraparound), A4=440Hz/octave reference frequencies, the boom-chick bass pattern (root on 1/3, fifth on 2/4, safe fallback), beat-role assignment (kick+bass / snare+comp / hi-hat), shuffle/swing timing offset (positive, tempo-scaled, zero for "straight") |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
@@ -44,6 +49,53 @@ file (informational — the shared `qs.Ui`/`qs.Commons` singletons trip a handfu
 known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
+
+## Manual CAGED reference and Songs review (v0.5.1)
+
+Same isolated method as the reviews below: real `Service.qml`,
+`panel/ReferenceSection.qml`, and `panel/PracticeSection.qml` driven through
+Quickshell's Qt offscreen backend via a throwaway `qs -p` config (removed
+afterward), isolated `XDG_STATE_HOME`, never touching the live desktop's
+actual plugin config. Verified against real screenshots and live property
+values, including against a drawn 660px boundary marker matching
+`Panel.qml`'s actual popup height ceiling:
+
+- **Reference overflow fix**: C Major, D Major, D7, Dm7, and Dsus2 all
+  rendered fully within the 660px boundary at both normal (800px) and 600px
+  width; scrolled to the bottom of the bounded Chord Tones/CAGED body, the
+  complete CAGED diagram was undamaged and full size; Scale and Triad modes
+  were pixel-unchanged from before the fix.
+- **CAGED shapes**: for D Major, every one of the five C/A/G/E/D shapes
+  reproduced its expected fret numbers, root/third/fifth pitch classes, and
+  barre position by hand-computed music theory (e.g. E-shape at the 10th
+  fret matching the documented example); C Major, D Minor, D7, Dmaj7, Dm7,
+  Dsus2, Dsus4, and Bdim were each spot-checked the same way; an alternate
+  tuning (Drop D) correctly suppressed CAGED with the documented message
+  while the Chord Tones map kept recalculating.
+- **Songs**: created, selected, and edited songs including one with a valid
+  `https` Lyrics URL, one with an unsafe `javascript:` Lyrics URL (Open
+  Lyrics correctly disabled with an explanatory note), and one with no
+  lyrics (compact empty state, not a blank area); the add/edit form
+  (Title/Artist/Tuning/Key/Notes/Lyrics/Lyrics URL) rendered fully within
+  660px including the Save/Cancel row.
+- **Start Practice**: starting a song switched to the Routines tab and
+  showed "Running: <title> — <artist>" with the song's own notes and BPM
+  already applied to the metronome, using the existing Finish/Stop
+  controls - no second timer/metronome/history implementation.
+- **Search Lyrics**: with a synthetic song (Title "Midnight Harbour", Artist
+  "Northbound Signal"), Search Lyrics was enabled and, separately, unit
+  tests confirmed the exact generated query
+  (`"Northbound Signal" "Midnight Harbour" lyrics`, percent-encoded into an
+  `https://duckduckgo.com` URL); a Title-only song still enabled Search
+  Lyrics; Open Lyrics and Search Lyrics were confirmed as visibly distinct
+  actions reading distinct fields.
+- **Regression**: Jam Sessions, dynamic/staged routines, hybrid-picking
+  routines, the tuner, the metronome, and Progress (rendered standalone
+  with Songs removed, showing only minutes/streak/sessions/exercise
+  progress) were all exercised and unchanged.
+
+No real song titles, artists, or lyrics were used in any screenshot or
+fixture during this review; see [music-content audit](docs/MUSIC_CONTENT_AUDIT.md).
 
 ## Manual configurable-routines and Jam Session review (v0.5.0)
 

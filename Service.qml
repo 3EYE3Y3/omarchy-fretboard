@@ -12,6 +12,7 @@ import "js/theory.js" as Theory
 import "js/fretboard.js" as Fretboard
 import "js/visual_shapes.js" as VisualShapes
 import "js/chord_voicings.js" as Voicings
+import "js/caged_shapes.js" as Caged
 import "js/routines.js" as Routines
 import "js/progress.js" as Progress
 import "js/exercises.js" as Exercises
@@ -549,6 +550,7 @@ Item {
     property string referenceTriadQuality: "major"
     property string referenceTriadInversion: "all"
     property string referenceTriadStringSet: "all"
+    property string referenceCagedShape: "E"
     property bool showIntervals: false
     property int fretCount: 24
 
@@ -586,7 +588,13 @@ Item {
     function setReferenceTriad(quality) { referenceMode = "triad"; referenceTriadQuality = quality }
     function setReferenceTriadInversion(value) { referenceTriadInversion = value }
     function setReferenceTriadStringSet(value) { referenceTriadStringSet = value }
-    function setReferenceChord(id) { referenceMode = "chord"; referenceChordId = id }
+    function setReferenceChord(id) {
+        referenceMode = "chord"
+        referenceChordId = id
+        var shapes = Caged.availableShapes(id)
+        if (shapes.indexOf(referenceCagedShape) < 0) referenceCagedShape = shapes.length ? shapes[0] : ""
+    }
+    function setReferenceCagedShape(shape) { referenceCagedShape = shape }
 
     function currentToneData() {
         if (referenceMode === "chord") return Theory.buildChord(referenceKey, referenceChordId)
@@ -619,6 +627,10 @@ Item {
             return VisualShapes.highlightContext(board, set, tones.rootPitchClass,
                 VisualShapes.flattenShapePositions(currentTriadShapes()), [])
         }
+        if (referenceMode === "chord") {
+            var cagedShape = currentCagedShape()
+            if (cagedShape) return VisualShapes.highlightContext(board, set, tones.rootPitchClass, Caged.shapePositions(cagedShape), [])
+        }
         return Fretboard.highlightFretboard(board, set, tones.rootPitchClass)
     }
 
@@ -628,6 +640,24 @@ Item {
         var chord = Theory.buildChord(referenceKey, referenceChordId)
         if (!chord) return []
         return Voicings.findVoicings(tuning.notes, Theory.pitchClassSet(chord.notes), chord.rootPitchClass, chord.chordId)
+    }
+
+    // CAGED shapes are a Standard-tuning system: real, named, playable
+    // fingerings, not chord-tone-derived guesses (js/caged_shapes.js). They
+    // are hidden entirely outside Standard tuning rather than misrepresented.
+    function availableCagedShapes() {
+        if (referenceMode !== "chord" || selectedTuningId !== "standard") return []
+        return Caged.availableShapes(referenceChordId)
+    }
+
+    function currentCagedShape() {
+        if (referenceMode !== "chord" || selectedTuningId !== "standard") return null
+        var chord = Theory.buildChord(referenceKey, referenceChordId)
+        if (!chord) return null
+        var shapes = Caged.availableShapes(referenceChordId)
+        if (!shapes.length) return null
+        var shapeLetter = shapes.indexOf(referenceCagedShape) >= 0 ? referenceCagedShape : shapes[0]
+        return Caged.transposeCagedShape(referenceChordId, shapeLetter, chord.rootPitchClass, currentTuning().notes)
     }
 
     function selectCircleKey(entry, isMinor) {
@@ -1293,6 +1323,34 @@ Item {
     function deleteSong(id) {
         songs = songs.filter(function (s) { return s.id !== id })
         requestSave()
+    }
+
+    // Reuses the same routine runner as every other practice item (a
+    // throwaway single-item "routine", exactly like startConfiguredRoutine's
+    // ad-hoc scale/triad templates) instead of a second timer/history/
+    // metronome engine. targetBpm is deliberately left unset on the item
+    // itself: applyToneAndMetronome() would otherwise route completion
+    // through the Clean/Nearly/Needs-Work exercise-outcome flow and log a
+    // bogus exerciseProgress entry under this throwaway item's random id.
+    // The metronome is started directly at the song's own BPM instead, and
+    // finishing (or stopping) the resulting one-item run still records a
+    // normal duration-based session via the existing advanceRoutine()/
+    // recordSession() path, so it shows up in Progress like any other.
+    function startSongPractice(song) {
+        if (!song) return
+        if (activeRoutine) stopRoutine()
+        var item = Routines.createItem({
+            type: "song",
+            label: song.title + (song.artist ? " — " + song.artist : ""),
+            notes: song.notes || "",
+            tuningId: song.tuning || null
+        })
+        startRoutineObject(Routines.createRoutine(item.label, [item]))
+        var bpm = song.currentBpm || song.originalBpm
+        if (bpm) {
+            setMetronomeBpm(bpm)
+            if (!metronomeRunning) startMetronome()
+        }
     }
 
     // ------------------------------------------------------------ history / progress view

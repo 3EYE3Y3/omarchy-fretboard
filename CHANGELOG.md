@@ -2,6 +2,74 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.1] - 2026-09-14
+
+CAGED Chord Reference and Songs-practice release, merged to `main` from
+`feature/caged-reference-v051`.
+
+### Added
+- Chord Reference redesigned around Root + Chord Quality: a chord name/
+  notes/formula header, the existing full fretboard chord-tone map
+  (relabeled "Chord Tones" so it reads as a note map, not a claimed
+  voicing), and a "CAGED Shapes" picker (C/A/G/E/D) driving one large,
+  readable diagram (nut, fret numbers, open/muted strings, root
+  distinction, barre indication, starting fret, note-name/interval
+  toggle). CAGED shapes (`js/caged_shapes.js`) are explicit named
+  open-chord forms transposed by `(targetRoot - refRoot) mod 12`, never
+  derived from chord pitch classes. Full verified C/A/G/E/D coverage for
+  Major; verified partial coverage (2-4 shapes) for Minor, 7, Maj7, m7,
+  dim, aug, sus2, sus4 and Power - never padded to 5 shapes for
+  symmetry. Sources in `docs/MUSIC_CONTENT_AUDIT.md`. CAGED is
+  Standard-tuning only (an explanatory message replaces it under any
+  other tuning) while the Chord Tones map keeps recalculating correctly
+  everywhere.
+- Reference's variable-height content (the fretboard map, and in Chord
+  mode the CAGED diagram) now scrolls in a bounded, clipped box instead
+  of painting outside the plugin panel; Tuning/Root, Show Intervals, and
+  each mode's primary selector stay fixed and usable while scrolling.
+  The Tuning/Root/Show-intervals row is responsive down to 600px width
+  without ever growing past its normal size at wide panels.
+- Songs moved from Progress into Practice (Metronome, Routines, Songs,
+  Jam, Tempo Trainer, Timer) - it's active practice content, not
+  history. Progress keeps only minutes/streak/sessions/exercise
+  progress. Existing saved songs needed no migration.
+- Each Song gained Lyrics (multiline, user-typed/pasted, stored locally,
+  wrapped and bounded-scrollable both while editing and practicing), an
+  optional Lyrics URL with an **Open Lyrics** action, and **Search
+  Lyrics** - a query built only from that song's own stored Title/Artist
+  (quoted exact-match, Title-only when Artist is empty), opened as an
+  https web search in the system browser. Both actions read the
+  currently selected song fresh at click time. Fretboard does not fetch,
+  scrape, call a lyrics API, or guess a lyrics URL anywhere; lyrics and
+  the lyrics link are entirely user-supplied and stay local
+  (`js/url_safety.js`, `js/lyrics_search.js`). **Start Practice** reuses
+  the existing routine runner (a throwaway single-item routine through
+  the same path `startConfiguredRoutine` already used) rather than a
+  second timer/history/metronome engine, landing on the normal Routines
+  running view and recording a normal history session on completion.
+- 56 new JS tests (`tests/caged_shapes.test.mjs`,
+  `tests/reference_layout.test.mjs`, `tests/url_safety.test.mjs`,
+  `tests/practice_songs_layout.test.mjs`, `tests/lyrics_search.test.mjs`,
+  plus additions to `tests/storage.test.mjs`) covering CAGED shape
+  correctness/coverage/tuning-safety, the bounded-scroll structural
+  guards, URL-safety rejection of unsafe schemes, and lyrics-search
+  query construction/encoding (spaces, apostrophes, punctuation,
+  ampersands, Unicode). 252 total JS tests (was 196). 47 total Python
+  tests, unchanged.
+
+### Fixed
+- A `ColumnLayout` quirk where one row's non-shrinkable width (or, for
+  Songs, an editor box height cap that was slightly too small) silently
+  forced sibling content to the wrong size at narrow widths or clipped
+  the last row of a taller panel - found and fixed during this release's
+  own manual acceptance passes.
+
+### Unchanged
+- Everything from v0.5.0 (configurable routine templates, Jam Sessions,
+  hybrid picking, dynamic stage engine, tuner, metronome, tempo trainer,
+  practice timer, local/offline architecture) and the Scale/Triad
+  Reference content from earlier releases.
+
 ## [0.5.0] - 2026-09-13
 
 Configurable routines and Jam Sessions release, merged to `main` from

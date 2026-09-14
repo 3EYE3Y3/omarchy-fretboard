@@ -6,8 +6,9 @@
 
 Fretboard brings the tools you actually use while practising guitar into one focused
 Omarchy panel: configurable guided practice, dynamic routines that advance
-themselves, hybrid-picking drills, local Blues/Jazz Jam Sessions, and the metronome,
-tuner and reference you'd expect - all local, all offline.
+themselves, hybrid-picking drills, local Blues/Jazz Jam Sessions, a Scale/Triad/Chord
+reference with a full CAGED system, Songs practice with your own lyrics, and the
+metronome and tuner you'd expect - all local, all offline.
 
 **No account. No cloud. No telemetry. Just pick up your guitar and practise.**
 
@@ -43,6 +44,20 @@ Blues, or a Dorian vamp), any of the 12 keys, a tempo, and a duration, then star
 playing. The running view tracks the current and next chord, bar number, and time
 remaining; the fretboard highlights the active chord's tones, plus the tonic
 blues/pentatonic scale as context for Blues styles.
+
+## Songs
+
+Keep the songs you're learning next to Routines and Jam: title, artist, key,
+tuning, BPM, notes, and your own lyrics. **Start Practice** hands the song straight
+to the same routine runner as everything else, so the metronome, timer, and
+practice history work exactly as they do for a routine.
+
+Lyrics are typed or pasted by you and stored only on this device - Fretboard never
+fetches, scrapes, or downloads lyrics, and never bundles any. **Search Lyrics** opens
+a normal web search built only from that song's own Title/Artist in your system
+browser, so you can find and read lyrics on a source you trust; **Open Lyrics**
+opens an optional link you save yourself, once it's a valid `http`/`https` URL.
+Neither ever reaches Fretboard itself - both are a one-way hand-off to your browser.
 
 ## Practice tools
 
@@ -80,6 +95,18 @@ The bundled tunings are Standard, Drop D, D Standard, Drop C, Eb Standard, Open 
 Open D, and DADGAD. Standard-tuning chord and named-position diagrams are never
 presented as valid shapes under an incompatible tuning; pitch membership still
 recalculates correctly.
+
+### CAGED chord reference
+
+Pick a root and a chord quality (Major, Minor, 5, 7, Maj7, m7, dim, aug, sus2, sus4)
+to see its name, notes, and interval formula, the complete chord-tone map across the
+whole neck, and a large, readable **CAGED Shapes** diagram (C/A/G/E/D) with fret
+numbers, open/muted strings, root distinction, barre indication, and a starting
+fret. Major has the full five-shape CAGED set; other qualities expose only the
+shapes that are genuinely conventional and independently verified (see
+[music-content audit](docs/MUSIC_CONTENT_AUDIT.md)) rather than a fabricated five
+for every chord. CAGED shapes are a Standard-tuning system, shown only there; the
+chord-tone map keeps recalculating correctly under any tuning.
 
 ## Routines and progress
 
@@ -123,10 +150,10 @@ Click the guitar icon in the bar to open Fretboard, or run:
 omarchy-shell io.github.3eye3y3.fretboard open
 ```
 
-The panel starts in **Practice**, whose own sub-tabs include **Metronome**,
-**Routines**, **Tempo Trainer**, **Timer**, and **Jam**. The panel's other main tabs
-are **Tuner**, **Reference**, and **Progress**. All interactive controls participate
-in the normal Qt keyboard focus chain; Escape closes the panel.
+The panel starts in **Practice**, whose own sub-tabs are **Metronome**,
+**Routines**, **Songs**, **Jam**, **Tempo Trainer**, and **Timer**. The panel's other
+main tabs are **Tuner**, **Reference**, and **Progress**. All interactive controls
+participate in the normal Qt keyboard focus chain; Escape closes the panel.
 
 Optional IPC actions are available for shortcuts:
 
@@ -158,14 +185,24 @@ in [Architecture](docs/ARCHITECTURE.md).
 
 ## Privacy and data
 
-Fretboard has no account, cloud service, analytics, advertising, or telemetry. It
-does not contact a remote API at runtime. Microphone audio is processed locally in
+Fretboard has no account, cloud service, analytics, advertising, or telemetry, and
+makes no background network requests. Microphone audio is processed locally in
 memory for pitch detection and is not recorded to disk or transmitted.
 
-Preferences, custom tunings, routines, songs, practice sessions, and progress are
-stored in one owner-only, atomically replaced JSON file under XDG state storage.
-Built-in music/reference data remains part of the plugin code. See
-[Architecture](docs/ARCHITECTURE.md) for the exact schema.
+Fretboard does not fetch or scrape lyrics. Users may explicitly open a lyrics web
+search or a saved lyrics URL in their system browser. Any lyrics stored in Fretboard
+are user-provided and remain local. Search Lyrics and Open Lyrics are the only two
+places Fretboard ever opens a network location, and both require an explicit click:
+Search Lyrics opens a generated `https://duckduckgo.com` search built only from the
+selected song's own Title/Artist; Open Lyrics opens the user's own saved link, only
+once it validates as a plain `http`/`https` URL. Neither transmits practice history,
+routines, or saved lyrics anywhere - both are a one-way hand-off to the system
+browser (`Qt.openUrlExternally`), never a shell command.
+
+Preferences, custom tunings, routines, songs (including lyrics and the lyrics URL),
+practice sessions, and progress are stored in one owner-only, atomically replaced
+JSON file under XDG state storage. Built-in music/reference data remains part of the
+plugin code. See [Architecture](docs/ARCHITECTURE.md) for the exact schema.
 
 ## Limitations
 
@@ -184,6 +221,11 @@ Built-in music/reference data remains part of the plugin code. See
   outline the changes, not studio-quality production.
 - Only Minor Pentatonic has a verified, transposable Box 1-5 shape today. Other
   configurable scales offer the full-fretboard map in any key.
+- Only Major chords have the full five-shape CAGED set. Other qualities expose only
+  the shapes that are conventional and independently verified (2-4 shapes); the
+  chord-tone map remains complete for every quality.
+- Search Lyrics opens a web search, not a lyrics result - Fretboard does not fetch,
+  parse, or display any web page content itself.
 
 ## Development and testing
 

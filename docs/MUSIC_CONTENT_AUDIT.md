@@ -1,5 +1,90 @@
 # Fretboard music-content correctness audit
 
+## v0.5.1 Songs lyrics: copyright and privacy audit
+
+Songs gained user-entered Lyrics, an optional Lyrics URL, and a Search
+Lyrics browser action (see CHANGELOG.md). Before release, the full working
+tree and reachable git history were audited for real, copyrighted song
+lyrics text:
+
+- **No real lyrics text is bundled anywhere** in application code, tests,
+  fixtures, screenshots, `preview.png`, README, or docs. Fretboard has no
+  built-in song/lyrics database of any kind - every `Song` record, including
+  its `lyrics` field, is created at runtime by the user and stored only in
+  their own `$XDG_STATE_HOME/omarchy/fretboard/state.json`.
+- One pre-release test fixture (`tests/storage.test.mjs`) briefly quoted two
+  real lines of a real song's lyrics to exercise the storage round-trip; it
+  was found during this audit and replaced with a fully synthetic Title/
+  Artist/lyrics example before the commit reachable from `main`. That
+  intermediate commit is not reachable from any retained branch after the
+  v0.5.1 squash-merge.
+- Real song **titles and artist names** (not lyrics) appear in a handful of
+  unit tests for `js/lyrics_search.js` (e.g. the worked example from the
+  feature request itself) purely to prove the query-construction/percent-
+  encoding logic against a concrete, recognizable case. Titles and artist
+  names are factual metadata, not the lyrics text itself, and none is
+  reproduced beyond a plain title/artist string.
+- All manual-acceptance testing (see TESTING.md) and all Songs-related
+  screenshots use a single fictional example throughout: Title "Midnight
+  Harbour", Artist "Northbound Signal", with placeholder (non-lyrical)
+  lyrics text such as "(placeholder verse one)".
+- Fretboard does not fetch, scrape, cache, or bundle lyrics from any
+  external source. Search Lyrics only ever opens a web search built from
+  the user's own stored Title/Artist in their system browser; Open Lyrics
+  only ever opens a URL the user typed themselves. Neither path brings any
+  lyrics content into Fretboard or its repository.
+
+## v0.5.1 CAGED chord reference (branch `feature/caged-reference-v051`)
+
+Replaces the Chord Reference's small "Open / E-root shape / A-root shape"
+strip with a proper CAGED reference: root + quality selection, the existing
+full-neck chord-tone map (relabeled `CHORD TONES`), and a `CAGED SHAPES`
+picker driving one large chord diagram. Based on the marketplace-reviewed
+`d32caf2` `main`, developed in an isolated worktree; `main` itself is
+untouched. New data lives in `js/caged_shapes.js`; nothing in
+`js/theory.js` or `js/chord_voicings.js` changed, so all existing Scale,
+Triad, Practice, Jam Session, and prior Chord-tab behavior (including the
+Practice routine chord-preview diagrams, which still use
+`js/chord_voicings.js`/`ChordDiagram.qml` unmodified) is unaffected.
+
+**Hard correctness requirement honored:** every `js/caged_shapes.js` entry
+is an explicit, named, canonical open-chord fingering (frets per string,
+`-1` = muted), not a shape found by searching the neck for chord pitch
+classes. A shape for a non-native root is produced by shifting every
+fretted string by `(targetRoot - refRoot) mod 12` -- the same "move the
+open shape up and barre it" transposition every CAGED lesson teaches. This
+is a different, stricter concept than `CHORD_TONES` (pitch-class
+membership across the whole neck, still computed by `js/theory.js` +
+`js/fretboard.js`, unchanged) and the two are never conflated in the code
+or the UI copy.
+
+**Independent verification (major CAGED forms), accessed 2026-09-14:**
+- [fachords.com — Learn The Guitar CAGED System](https://www.fachords.com/guitar-caged-system/): gives explicit fret strings for all five major shapes -- C `x32010`, A `x02220`, G `320003`, E `022100`, D `xx0232` -- matching this file's data exactly.
+- [JustinGuitar — CAGED System module](https://www.justinguitar.com/modules/caged-system): independently corroborates the E (`022100`) and A (`x02220`) open forms as the module's first two CAGED shapes.
+- Cross-checked against this repo's own already-audited `js/chord_voicings.js` `E_ROOT_SHAPES.major`/`A_ROOT_SHAPES.major` (`[0,2,2,1,0,0]`/`[-1,0,2,2,2,0]`), which agree exactly -- the new E/A major CAGED shapes are the *same* fingerings, not a second, potentially-divergent set of "verified" data.
+- Internal gate: `tests/caged_shapes.test.mjs` rebuilds each shape's sounding pitch classes from `js/theory.js`'s own chord formula for every root C through B and asserts every sounding string is a chord tone, the root pitch class is present on at least one string, and (where available) the transposed shape reproduces the exact published fret numbers above at offset 0.
+
+**Additional forms beyond the original two E/A shapes, each checked against [guitar-chord.org](https://www.guitar-chord.org)'s individual chord pages (same derivation cross-checked by hand against the chord's own formula in `js/theory.js` before being accepted -- one fetch of that site returned an internally-inconsistent C7 shape, i.e. a chord tone that could not belong to a C7 triad, and was discarded rather than used):**
+- G7 `320001` (open G7), D7 `xx0212` (open D7) -- extending `dominant7` to G/D shapes.
+- Dmaj7 `xx0222` (open Dmaj7) -- extending `major7` to a D shape.
+- Dm7 `xx0211` (open Dm7) -- extending `minor7` to a D shape.
+- Dm `xx0231` (open Dm) -- extending `minor` to a D shape.
+
+**Coverage decisions (why some qualities have fewer than 5 shapes):**
+- **Major**: full C/A/G/E/D CAGED set -- the textbook case, verified above.
+- **Minor**: A/E/D only. A C-shape or G-shape minor would require flatting a string that is *open* in the major reference chord (C's high E, G's low E/B), which is impossible without a fret -- no genuine open-derived shape exists, so none is fabricated.
+- **Dominant 7, Major 7, Minor 7**: the already-audited E/A shapes, plus a D shape (all three have a well-known open Dx7/Dmaj7/Dm7 chord). G-shape 7 was added only for dominant7 (open G7 is extremely standard); C-shape was deliberately omitted everywhere in this group because the one open-C7 fingering found online could not be independently confirmed against chord-tone math and this project does not display an unverified shape merely to complete a row of five.
+- **Diminished, Augmented**: E/A only. Both are symmetric chords guitar pedagogy teaches as two movable shapes (root on string 6, root on string 5), never as a named five-shape CAGED set.
+- **Sus2, Sus4, Power/5**: E/A only, reusing the already-audited `chord_voicings.js` fingerings. Power chords in particular are universally taught as exactly these two shapes -- offering more would misrepresent convention, not extend it.
+
+**Standard-tuning boundary preserved:** `caged_shapes.js`'s
+`isStandardTuning()` mirrors the identical guard already in
+`chord_voicings.js`; `transposeCagedShape()`/`availableShapes()` return
+null/`[]` for any other tuning, and the UI shows a static explanatory
+message instead of silently reusing Standard-tuning shapes or switching
+the active tuning. `CHORD_TONES` keeps recalculating correctly for every
+tuning via the unchanged `js/theory.js`/`js/fretboard.js` pipeline.
+
 ## v0.5.0 configurable routines and Jam Sessions
 
 Branch `feature/dynamic-practice-v04` (kept; see CHANGELOG for the naming
