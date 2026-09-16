@@ -58,6 +58,16 @@ Item {
             }
         }
 
+        Text {
+            visible: !!(root.service && root.service.tunerDeviceEnumerationError)
+            Layout.fillWidth: true
+            text: root.service ? root.service.tunerDeviceEnumerationError : ""
+            wrapMode: Text.WordWrap
+            color: Color.urgent
+            font.family: Style.font.family
+            font.pixelSize: Style.font.body
+        }
+
         RowLayout {
             Layout.fillWidth: true
             Dropdown {

@@ -3,8 +3,8 @@
 ## Automated
 
 ```bash
-npm test                                        # 252 tests, node:test + node:assert/strict
-python3 -m unittest discover -s helper/tests    # 47 tests, stdlib unittest
+npm test                                        # 257 tests, node:test + node:assert/strict
+python3 -m unittest discover -s helper/tests    # 64 tests, stdlib unittest
 ./scripts/quality                                # everything below, plus lint/validate
 ```
 
@@ -43,12 +43,36 @@ reimplementation drift between "the logic" and "the tested logic."
 | Jam synthesis math (Python, v0.5) | `helper/jam_synth.py` / `helper/tests/test_jam_synth.py` | Chord-tone pitch classes for all 7 qualities (including wraparound), A4=440Hz/octave reference frequencies, the boom-chick bass pattern (root on 1/3, fifth on 2/4, safe fallback), beat-role assignment (kick+bass / snare+comp / hi-hat), shuffle/swing timing offset (positive, tempo-scaled, zero for "straight") |
 | YIN pitch detection | `helper/pitch_yin.py` / `helper/tests/test_pitch_yin.py` | Recovers known frequencies from synthetic sine waves (both the NumPy and pure-Python code paths), returns nothing for silence/white noise |
 | Tuner noise-tolerance stabilizer | `helper/tuner_stability.py` / `helper/tests/test_tuner_stability.py` | Silence, low-level broadband noise, and a short single-hop transient never confirm a lock; a clean tone (alone, and under quiet background noise) locks quickly and accurately; a decaying tone is held through most of the decay without drifting to an unrelated pitch and releases exactly once; a steady tone never flickers once locked; Noisy Room requires a louder signal than Normal and Quiet confirms no slower than Noisy Room; every sensitivity preset's parameters are internally consistent; plus fast pure-logic unit tests of the stabilizer's confirm/hold/hysteresis/switch behavior against synthetic frames |
+| Bounded device enumeration (v0.5.2) | `helper/audio_devices.py`, `js/device_output.js` / `helper/tests/test_audio_devices.py`, `tests/device_output.test.mjs` | Controlled fake executables cover normal/zero/malformed results, stdout and stderr floods, just-below/exceeded ceilings, device/field limits, timeout, ignored termination, cleanup/reaping, fixed `/usr/bin/pactl` identity, hostile `PATH`, and the closed environment. An offscreen Quickshell integration substitutes an oversized `SIGTERM`-resistant helper and proves the independent QML cap kills/reaps it. Static guards ensure chunk streaming and cap-before-retain ordering remain in `Service.qml`. |
 
 `scripts/quality` also runs `omarchy plugin validate .`, `qmllint` over every `.qml`
 file (informational — the shared `qs.Ui`/`qs.Commons` singletons trip a handful of
 known `Member ... not found on type "QObject"` false positives that also show up
 linting first-party Omarchy panels; anything else is treated as real), and
 `git diff --check` for whitespace hygiene.
+
+## Manual security/audio acceptance (v0.5.2)
+
+The real production `Service.qml` was loaded through an isolated offscreen
+Quickshell instance with a throwaway `XDG_STATE_HOME`, while using the machine's
+real PipeWire/PulseAudio session. The same checkout is also the live installed
+plugin source, so the Omarchy shell was restarted once and the Fretboard panel was
+opened/closed through its public IPC endpoint; the fresh shell log contained no
+Fretboard QML/runtime error.
+
+- The hardened helper returned the machine's two microphones both with the normal
+  environment and under `env -i` with only `XDG_RUNTIME_DIR`, proving the documented
+  closed environment still reaches the normal local runtime socket.
+- The tuner started with a real `pw-record` child and stopped; the metronome started
+  with real generated audio through `pw-cat` and stopped; Major Blues Jam started,
+  paused, resumed and stopped; a second tuner/metronome/Dorian Jam sequence repeated
+  those lifecycle paths.
+- The service reported the expected final stopped state for tuner, metronome, and
+  Jam. Process snapshots before and after found no remaining `audio_devices.py`,
+  `audio_engine.py`, `tuner_engine.py`, `pactl`, `pw-cat`, or `pw-record` process.
+- Separately, the offscreen adversarial test fed more than 64 KiB from a fake helper
+  that ignored `SIGTERM`. `Service.qml` rejected it, escalated to signal 9, and the
+  test confirmed the helper PID had been reaped.
 
 ## Manual CAGED reference and Songs review (v0.5.1)
 

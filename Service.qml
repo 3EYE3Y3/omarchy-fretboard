@@ -18,6 +18,7 @@ import "js/progress.js" as Progress
 import "js/exercises.js" as Exercises
 import "js/presets.js" as Presets
 import "js/jam_sessions.js" as JamSessions
+import "js/device_output.js" as DeviceOutput
 
 Item {
     id: service
@@ -454,6 +455,11 @@ Item {
     property var tunerReading: null
     property string tunerInputDevice: ""
     property var tunerDevices: []
+    property string tunerDeviceEnumerationError: ""
+    property string deviceListOutput: ""
+    property int deviceListStdoutBytes: 0
+    property int deviceListStderrBytes: 0
+    property bool deviceListFailed: false
 
     Process {
         id: tunerProcess
@@ -524,20 +530,93 @@ Item {
         requestSave()
     }
 
+    function failDeviceList() {
+        if (deviceListFailed) return
+        deviceListFailed = true
+        deviceListOutput = ""
+        tunerDevices = []
+        tunerDeviceEnumerationError = "Input-device enumeration failed safely. Refresh to retry."
+        if (deviceListProcess.running) {
+            deviceListProcess.running = false
+            deviceListKillTimer.restart()
+        }
+    }
+
+    function consumeDeviceListStdout(chunk) {
+        if (deviceListFailed) return
+        var bytes = DeviceOutput.utf8ByteLength(chunk)
+        if (deviceListStdoutBytes + bytes > DeviceOutput.MAX_OUTPUT_BYTES) {
+            failDeviceList()
+            return
+        }
+        deviceListStdoutBytes += bytes
+        deviceListOutput += chunk
+    }
+
+    function consumeDeviceListStderr(chunk) {
+        if (deviceListFailed) return
+        var bytes = DeviceOutput.utf8ByteLength(chunk)
+        if (deviceListStderrBytes + bytes > DeviceOutput.MAX_STDERR_BYTES) {
+            failDeviceList()
+            return
+        }
+        deviceListStderrBytes += bytes
+    }
+
     Process {
         id: deviceListProcess
         running: false
         command: [service.pythonBin, service.devicesHelperPath]
-        stdout: StdioCollector { id: deviceListCollector; waitForEnd: true }
-        onExited: function (code) {
-            try { service.tunerDevices = JSON.parse(deviceListCollector.text || "[]") }
-            catch (error) { service.tunerDevices = [] }
+        stdout: SplitParser {
+            splitMarker: ""
+            onRead: function (chunk) { service.consumeDeviceListStdout(chunk) }
         }
+        stderr: SplitParser {
+            splitMarker: ""
+            onRead: function (chunk) { service.consumeDeviceListStderr(chunk) }
+        }
+        onExited: function (code) {
+            deviceListTimeoutTimer.stop()
+            deviceListKillTimer.stop()
+            if (service.deviceListFailed) return
+            if (code !== 0) {
+                service.failDeviceList()
+                return
+            }
+            var result = DeviceOutput.parsePayload(service.deviceListOutput)
+            service.deviceListOutput = ""
+            if (!result.ok) {
+                service.failDeviceList()
+                return
+            }
+            service.tunerDevices = result.devices
+            service.tunerDeviceEnumerationError = ""
+        }
+    }
+
+    Timer {
+        id: deviceListTimeoutTimer
+        interval: 6000
+        repeat: false
+        onTriggered: service.failDeviceList()
+    }
+
+    Timer {
+        id: deviceListKillTimer
+        interval: 250
+        repeat: false
+        onTriggered: if (deviceListProcess.running) deviceListProcess.signal(9)
     }
 
     function refreshTunerDevices() {
         if (deviceListProcess.running) return
+        deviceListOutput = ""
+        deviceListStdoutBytes = 0
+        deviceListStderrBytes = 0
+        deviceListFailed = false
+        tunerDeviceEnumerationError = ""
         deviceListProcess.running = true
+        deviceListTimeoutTimer.restart()
     }
 
     // ------------------------------------------------------------ reference (fretboard/scale/chord/circle)

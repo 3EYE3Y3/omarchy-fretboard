@@ -172,7 +172,8 @@ Fretboard uses the PipeWire command-line tools already present in Omarchy:
   (bass, chord comping, drums - synthesized locally, never a downloaded or sampled
   recording).
 - `pw-record` captures microphone samples for the tuner.
-- `pactl` lists available tuner input devices.
+- `/usr/bin/pactl` lists available tuner input devices through the bounded,
+  closed-environment helper documented in [SECURITY.md](SECURITY.md).
 
 `Service.qml` launches only the bundled local Python helpers, which communicate over
 stdio and in turn launch those local PipeWire tools. They run without privileges,

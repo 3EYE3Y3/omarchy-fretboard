@@ -75,6 +75,16 @@ each helper installs a `SIGTERM` handler that terminates its own PipeWire child 
 exiting, so `Service.qml` only ever has to terminate the one direct child process it
 spawned.
 
+Device enumeration is a separate one-shot path with two independently enforced
+boundaries. `helper/audio_devices.py` directly executes the validated absolute
+`/usr/bin/pactl` identity in a new session and a closed environment, incrementally
+draining stdout/stderr under 256 KiB/16 KiB ceilings and a five-second deadline.
+It terminates the whole process group, kill-escalates after 250 ms, and reaps on any
+breach; only complete zero-exit JSON reaches the bounded 64-device parser.
+`Service.qml` then incrementally supervises the helper under separate 64 KiB stdout,
+8 KiB stderr, and six-second limits before parsing. See root `SECURITY.md` for the
+exact environment, field ceilings, failure behavior, and adversarial proof.
+
 ## Persistence
 
 State lives at `$XDG_STATE_HOME/omarchy/fretboard/state.json` (falling back to

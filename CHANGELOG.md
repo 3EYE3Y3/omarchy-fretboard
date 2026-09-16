@@ -2,6 +2,40 @@
 
 All notable changes to this project are documented in this file.
 
+## [0.5.2] - 2026-09-16
+
+Security-hardening release addressing the bounded-output/process-execution finding
+from the Omarchy Marketplace review of v0.5.1.
+
+### Security
+- Device enumeration now executes only the root-owned, non-writable regular file
+  `/usr/bin/pactl`; it never resolves `pactl` through inherited `PATH`. The child
+  receives a closed environment containing fixed UTF-8 locale values and only the
+  optional `XDG_RUNTIME_DIR` / `PULSE_SERVER` socket selectors required for normal
+  local or explicitly configured PulseAudio/PipeWire connections.
+- `pactl` stdout and stderr are drained concurrently and incrementally, with hard
+  pre-append ceilings of 256 KiB and 16 KiB. A five-second deadline or either size
+  breach terminates the new-session process group, escalates from `SIGTERM` to
+  `SIGKILL` after 250 ms, and synchronously reaps the direct child. Partial output
+  is never parsed.
+- The parser now fails closed on malformed or unexpected records and caps results
+  at 64 input devices, 256 UTF-8 bytes per device id, and 512 UTF-8 bytes per
+  description. Serialized helper output is independently capped at 60 KiB.
+- `Service.qml` no longer uses a whole-stream collector for device enumeration.
+  It receives unbuffered chunks, checks before retaining them, caps helper stdout
+  at 64 KiB and stderr at 8 KiB, enforces a separate six-second deadline, and
+  terminates then kill-escalates a non-responsive helper before rejecting the
+  result and showing a safe retryable error.
+
+### Tests
+- Added controlled fake-`pactl` coverage for normal/empty/malformed output, both
+  output streams and their boundaries, excessive devices and fields, deadline and
+  signal-resistant children, reaping, trusted executable identity, hostile
+  `PATH`, and the exact closed environment.
+- Added QML-side payload-limit/schema tests plus an offscreen Quickshell integration
+  test proving an oversized, `SIGTERM`-resistant fake helper is rejected, killed,
+  and reaped by the independent supervisor cap.
+
 ## [0.5.1] - 2026-09-14
 
 CAGED Chord Reference and Songs-practice release, merged to `main` from
